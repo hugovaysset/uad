@@ -1,0 +1,10 @@
+Metadata-Version: 1.2
+Name: uad
+Version: 0.0.1
+Summary: Utils for anomaly detection using deep learning
+Home-page: UNKNOWN
+Author: Hugo Vaysset
+License: UNKNOWN
+Description: UNKNOWN
+Platform: UNKNOWN
+Requires-Python: >=3.6
