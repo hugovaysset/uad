@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def is_anormal(reference, predictions, criterion="threshold", pix_threshold=0.5, im_threshold=10):
+def is_anormal(reference, predictions, criterion="l2", pix_threshold=0.5, im_threshold=10):
     """
     Takes images as inputs! Predicts if each image of predictions is an anomaly according to the criterion
     and the reference images.

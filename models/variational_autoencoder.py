@@ -8,6 +8,9 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
 
+from sklearn.metrics import accuracy_score
+from uad.decision.reconstruction import is_anormal
+
 
 class Sampling(layers.Layer):
     """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
@@ -43,6 +46,7 @@ def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True, activat
         x = layers.Activation(activation2)(x)
 
     return x
+
 
 class ConvolutionalVAE(Model):
     """
@@ -154,6 +158,20 @@ class ConvolutionalVAE(Model):
             "reconstruction_loss": reconstruction_loss,
             "kl_loss": kl_loss,
         }
+
+    def test_step(self, data):
+        """
+        We give (x_val, x_val) as validation data and not (x_val, y_val), which could
+        be pratictal to directly compute accuracy and reconstruction loss, but is
+        inconsistent with train_step arguments.
+        :param data:
+        :return:
+        """
+        x_val = data[0]
+        z_mean, z_log_var, z = self.encoder(x_val)
+        reconstruction = self.decoder(z)
+        reconstruction_loss = tf.reduce_mean(tf.keras.losses.binary_crossentropy(x_val, reconstruction))
+        return {"reconstruction_loss": reconstruction_loss}
 
     def call(self, inputs):
         z_mean, z_log_var, z = self.encoder(inputs)
