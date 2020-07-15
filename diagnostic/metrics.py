@@ -96,18 +96,12 @@ def plot_ROC(fpr, tpr, labels=["ROC curve"]):
     return fig, ax
 
 
-def diagnostic_plot(train_loss_values=[], val_loss_values=[], train_accuracy_values=[], val_accuracy_values=[]):
-    """
-    Plot Loss values and accuracies on train set and validation set in order to detect overfitting
-    :param train_loss_values:
-    :param val_loss_values:
-    :param train_accuracy_values:
-    :param val_accuracy_values:
-    :return:
-    """
-    fig, ax = plt.subplots(1, 1, figsize=8, 8)
+def plot_history(history, metric_names=["reconstruction_loss", "validation_loss", "validation_accuracy"]):
+    fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+    colors = ["b", "g", "r", "orange", "k", "c", "m", "y"]
 
-    ax.plot(train_loss_values, c="b", labels="Loss on train set")
-    ax.plot(train_accuracy_values, c="g", labels="Accuracy on train set")
-    ax.plot(val_loss_values, c="orange", labels="Loss on val set")
-    ax.plot(val_accuracy_values, c="r", labels="Accuracy on val set")
+    for i, metric in enumerate(metric_names):
+        ax.plot(history.history[metric], c=colors[i % len(colors)], label=metric_names[i])
+
+    ax.legend()
+    return fig, ax

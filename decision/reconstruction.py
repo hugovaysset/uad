@@ -108,9 +108,23 @@ def threshold_criterion(reference, predictions, pix_threshold=0.5, normalized=Fa
 
 
 def L2_criterion(reference, predictions):
-
+  """
+  Returns the L2 distance between two images. Reference and predictions should
+  be either images (matrix) of batch of images (3-tensor)
+  """
+  if len(reference.shape) == 2: # individual example
+    return np.sum((reference - predictions) ** 2)
+  elif len(reference.shape) == 3: # batch
     return np.sum((reference - predictions) ** 2, axis=(1, 2))
 
 
+
 def L1_criterion(reference, predictions):
+  """
+  Returns the L1 distance between two images. Reference and predictions should
+  be either images (matrix) of batch of images (3-tensor)
+  """
+  if len(reference.shape) == 2: # individual example
+    return np.sum(np.abs(reference - predictions))
+  elif len(reference.shape) == 3: # batch
     return np.sum(np.abs(reference - predictions), axis=(1, 2))
