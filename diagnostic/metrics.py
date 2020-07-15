@@ -101,7 +101,7 @@ def plot_history(history, metric_names=["reconstruction_loss", "validation_loss"
     colors = ["b", "g", "r", "orange", "k", "c", "m", "y"]
 
     for i, metric in enumerate(metric_names):
-        ax.plot(history.history[metric], c=colors[i % len(colors)], label=metric_names[i])
+        ax.plot(history.history[metric].numpy(), c=colors[i % len(colors)], label=metric_names[i])
 
     ax.legend()
     return fig, ax

@@ -171,6 +171,7 @@ class ConvolutionalVAE(Model):
         z_mean, z_log_var, z = self.encoder(x_val)
         reconstruction = self.decoder(z)
         reconstruction_loss = tf.reduce_mean(tf.keras.losses.binary_crossentropy(x_val, reconstruction))
+        reconstruction_loss *= 28 * 28
         return {"reconstruction_loss": reconstruction_loss}
 
     def call(self, inputs):

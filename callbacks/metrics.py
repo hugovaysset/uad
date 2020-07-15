@@ -71,5 +71,5 @@ class AccuracyCallback(tf.keras.callbacks.Callback):
         accuracy = tf.keras.metrics.Precision()
         accuracy.update_state(self.gt_labels, y_pred)
         res = accuracy.result()
-        logs[f"{self.prefix}_accuracy"] = res
-        print(f" - {self.prefix} accuracy: {res}")
+        logs[f"{self.prefix}_accuracy"] = res * 100
+        print(f" - {self.prefix} accuracy: {res * 100}%")
