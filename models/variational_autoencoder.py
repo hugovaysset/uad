@@ -8,6 +8,7 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
 
+
 class Sampling(layers.Layer):
     """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
 
@@ -18,7 +19,9 @@ class Sampling(layers.Layer):
         epsilon = tf.keras.backend.random_normal(shape=(batch, dim1, dim2, dim3))
         return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
-def conv2d_block(self, input_tensor, n_filters, kernel_size=3, batchnorm=True, activation1="sigmoid", activation2="sigmoid"):
+
+def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True, activation1="sigmoid",
+                 activation2="sigmoid"):
     """Function to add 2 convolutional layers with the parameters passed to it
     activation1: name of the activation function to apply. If none, pass "" (empty string)
     activation2: name of the activation function to apply. If none, pass "" (empty string)
@@ -29,18 +32,17 @@ def conv2d_block(self, input_tensor, n_filters, kernel_size=3, batchnorm=True, a
     if batchnorm:
         x = layers.BatchNormalization()(x)
     if activation1 != "":
-        x = layers.Activation('sigmoid')(x)
+        x = layers.Activation(activation1)(x)
 
     # second layer
     x = layers.Conv2D(filters=n_filters, kernel_size=(kernel_size, kernel_size), \
                       kernel_initializer='he_normal', padding='same')(input_tensor)
     if batchnorm:
         x = layers.BatchNormalization()(x)
-    if activation2 !=  "":
-        x = layers.Activation('sigmoid')(x)
+    if activation2 != "":
+        x = layers.Activation(activation2)(x)
 
     return x
-
 
 class ConvolutionalVAE(Model):
     """
@@ -50,11 +52,11 @@ class ConvolutionalVAE(Model):
     function. Well suited for MNIST dataset
     """
 
-    def __init__(self, latent_dim, n_filters=16, k_size=3, batchnorm=False, dropout=0.2, ):
+    def __init__(self, latent_dim, n_filters=16, k_size=3, batchnorm=False, dropout=0.2):
         super(ConvolutionalVAE, self).__init__()
         self.latent_dim = latent_dim
 
-        latent_side = int(np.sqrt(latent_dim))
+        latent_side = 4
 
         encoder_inputs = layers.Input(shape=(28, 28, 1), name="encoder_inputs")
 
@@ -153,18 +155,6 @@ class ConvolutionalVAE(Model):
             "kl_loss": kl_loss,
         }
 
-    def test_step(self, data):
-        if isinstance(data, tuple):
-            data = data[0]
-        with tf.GradientTape() as tape:
-            z_mean, z_log_var, z = self.encoder(data)
-            reconstruction = self.decoder(z)
-            reconstruction_loss = tf.reduce_mean(
-                tf.keras.losses.binary_crossentropy(data, reconstruction)
-            )
-            reconstruction_loss *= 28 * 28
-        return {"reconstruction_loss": reconstruction_loss}
-
     def call(self, inputs):
         z_mean, z_log_var, z = self.encoder(inputs)
         return self.decoder(z)
@@ -187,6 +177,7 @@ class VAE(Model):
     using the keras functional API and pass them as arguments to the class to instantiate
     a custom VAE model.
     """
+
     def __init__(self, encoder, decoder, dims=(28, 28, 1), latent_dim=2, **kwargs):
         super(VAE, self).__init__(**kwargs)
         self.dims = dims
@@ -274,6 +265,7 @@ class SVDD_VAE(Model):
     does not come with a pre-defined achitecture. Build the encoder and decoder using the
     functional API and pass them to the constructor.
     """
+
     def __init__(self, encoder, decoder, dims=(28, 28, 1), latent_dim=2, LAMBDA=1e-6, **kwargs):
         super(SVDD_VAE, self).__init__(**kwargs)
         self.dims = dims
@@ -299,7 +291,8 @@ class SVDD_VAE(Model):
             reconstruction_loss *= 28 * 28
 
             size = tf.shape(z_mean)[1] + tf.shape(z_mean)[2] + tf.shape(z_mean)[3]
-            svdd_loss = tf.cast((1 / size), dtype=tf.float32) * tf.norm(tf.norm(z_mean - self.CENTER, axis=-1, ord="euclidean"), axis=(-2, -1), ord="fro")
+            svdd_loss = tf.cast((1 / size), dtype=tf.float32) * tf.norm(
+                tf.norm(z_mean - self.CENTER, axis=-1, ord="euclidean"), axis=(-2, -1), ord="fro")
             # distance_loss = (1 / size) * tf.cast(tf.norm((z - self.CENTER) ** 2), dtype=tf.double)
             weight_decay = 0
             # for lay in self.encoder.layers:
