@@ -4,7 +4,6 @@ from keras import backend as K
 from sklearn.metrics import roc_curve, auc
 from uad.decision.reconstruction import decision_function
 
-
 def is_binary(labels):
     l = []
     for elt in labels:
@@ -108,21 +107,21 @@ def plot_history(history, metric_names=["reconstruction_loss", "validation_loss"
     return fig, ax
 
 
-def recall_m(y_true, y_pred):
+def compute_recall(y_true, y_pred):
     true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
     possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
-    recall = true_positives / (possible_positives + K.epsilon())
+    recall = tf.cast(true_positives, dtype=tf.float32) / (tf.cast(possible_positives, dtype=tf.float32) + K.epsilon())
     return recall
 
 
-def precision_m(y_true, y_pred):
+def compute_precision(y_true, y_pred):
     true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
     predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
-    precision = true_positives / (predicted_positives + K.epsilon())
+    precision = tf.cast(true_positives, dtype=tf.float32) / (tf.cast(predicted_positives, dtype=tf.float32) + K.epsilon())
     return precision
 
 
-def f1_m(y_true, y_pred):
+def compute_f1(y_true, y_pred):
     precision = precision_m(y_true, y_pred)
     recall = recall_m(y_true, y_pred)
     return 2 * ((precision * recall) / (precision + recall + K.epsilon()))
