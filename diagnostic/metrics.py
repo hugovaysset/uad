@@ -83,7 +83,7 @@ def plot_ROC(fpr, tpr, labels=["ROC curve"]):
     ax.set_xlabel("False positive rate")
     ax.set_ylabel("True positive rate")
     fig.suptitle("ROC curve")
-    if fpr.shape[0] == 1:
+    if len(fpr.shape) == 1:
         ax.plot(fpr, tpr, '.', c="orange")
         ax.plot(fpr, tpr, c="orange", label=f"{labels[0]} (AUC = {round(compute_AUC(fpr, tpr), 3)})")
     else:
@@ -101,16 +101,37 @@ def plot_history(history, metric_names=["reconstruction_loss", "validation_loss"
     Plot the values of given loss/metric during train step. Group the similar metrics by row in order to
     have separate plots (better if the scales of each metrics are different)
     """
-    colors = ["b", "g", "r", "orange", "k", "c", "m", "y"]
+    colors = ["b", "g", "orange", "k", "c", "m", "y"]
 
     fig, axes = plt.subplots(1, metric_names.shape[0], figsize=(20, 8), sharex="all")
-    for row, ax in zip(metric_names, axes.flatten()):
-        for i, metric in enumerate(row):
-            ax.plot(history.history[metric], c=colors[i % len(colors)], label=row[i])
+    if metric_names.shape[0] == 1:  # 1 row, several columns
+        ax = axes  # do not support iteration if there is one element
+        for i, metric in enumerate(metric_names[0]):  # iterate on the first row
+            ax.plot(history.history[metric], c=colors[i % len(colors)], label=metric_names[0][i])
         ax.legend()
         ax.set_title("Loss/metric during train step")
         ax.set_ylabel("loss/metric")
         ax.set_xlabel("epoch")
+    elif metric_names.shape[0] > 1 and len(metric_names.shape) == 1:  # several metrics in one vector
+        ax = axes
+        for i, metric in enumerate(metric_names):
+            print(colors[i % len(colors)])
+            print(history.history[metric])
+            ax.plot(history.history[metric], c=colors[i % len(colors)], label=metric_names[0][i])
+        ax.legend()
+        ax.set_title("Loss/metric during train step")
+        ax.set_ylabel("loss/metric")
+        ax.set_xlabel("epoch")
+    else:  # several rows, columns
+        for row, ax in zip(metric_names, axes):
+            for i, metric in enumerate(row):
+                print(colors[i % len(colors)])
+                print(history.history[metric])
+                ax.plot(history.history[metric], c=colors[i % len(colors)], label=row[i])
+            ax.legend()
+            ax.set_title("Loss/metric during train step")
+            ax.set_ylabel("loss/metric")
+            ax.set_xlabel("epoch")
 
     return fig, axes
 

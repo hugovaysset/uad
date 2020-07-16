@@ -3,7 +3,6 @@
 #########################################################################
 
 
-
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import roc_curve, auc
@@ -49,31 +48,6 @@ def compute_AUC(fpr, tpr):
     return auc(fpr, tpr)
 
 
-def compute_AUC_on_all(model_class, x_train, x_test, y_test, n_classes=10, epochs=8, **params):
-    """
-    Successively train a particular model on each class (considering this class as normal and all the others as abnormal)
-    and evaluate it by computing the AUC score in each case.
-    :param model_class: class which implements the model
-    :param x_train: training data sorted by digits ([all_0_examples, ..., all_n_examples])
-    :param x_test: test set (containing examples of all digits)
-    :param y_test: test labels (don't have to binary)
-    :param n_classes: number of classes/digits
-    :param epochs: number of epochs of training
-    """
-    auc_scores = []
-    for k in range(n_classes):
-        print(f"Digit {k}, # Training examples: {x_train[k].shape[0]}")
-        model = model_class(**params)
-        model.compile(optimizer=tf.keras.optimizers.Adam())
-        model.fit(x_train[k], x_train[k], epochs=epochs, batch_size=128)
-        predictions = model.predict(x_test)
-        fpr, tpr, _ = compute_ROC(x_test, predictions, y_test, criterion="l2", interest_class=k)
-        auc = compute_AUC(fpr, tpr)
-        auc_scores.append(auc)
-
-    return np.array(auc_scores)
-
-
 def plot_ROC(fpr, tpr, labels=["ROC curve"]):
     """
     Plot the ROC curves from false positives rate and true positives rate
@@ -100,3 +74,28 @@ def plot_ROC(fpr, tpr, labels=["ROC curve"]):
     ax.set_yscale("linear")
     ax.set_ylim(bottom=-0.02, top=1.03)
     return fig, ax
+
+
+def compute_AUC_on_all(model_class, x_train, x_test, y_test, n_classes=10, epochs=8, **params):
+    """
+    Successively train a particular model on each class (considering this class as normal and all the others as abnormal)
+    and evaluate it by computing the AUC score in each case.
+    :param model_class: class which implements the model
+    :param x_train: training data sorted by digits ([all_0_examples, ..., all_n_examples])
+    :param x_test: test set (containing examples of all digits)
+    :param y_test: test labels (don't have to binary)
+    :param n_classes: number of classes/digits
+    :param epochs: number of epochs of training
+    """
+    auc_scores = []
+    for k in range(n_classes):
+        print(f"Digit {k}, # Training examples: {x_train[k].shape[0]}")
+        model = model_class(**params)
+        model.compile(optimizer=tf.keras.optimizers.Adam())
+        model.fit(x_train[k], x_train[k], epochs=epochs, batch_size=128)
+        predictions = model.predict(x_test)
+        fpr, tpr, _ = compute_ROC(x_test, predictions, y_test, criterion="l2", interest_class=k)
+        auc = compute_AUC(fpr, tpr)
+        auc_scores.append(auc)
+
+    return np.array(auc_scores)

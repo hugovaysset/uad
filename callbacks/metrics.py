@@ -3,7 +3,7 @@ import tensorflow as tf
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_curve
 from uad.decision.reconstruction import is_anormal
-
+from uad.diagnostic.metrics import compute_recall, compute_precision, compute_f1
 
 class AUCCallback(tf.keras.callbacks.Callback):
     """
@@ -35,15 +35,15 @@ class AUCCallback(tf.keras.callbacks.Callback):
         auc = tf.keras.metrics.AUC()
         auc.update_state(self.gt_labels, y_pred)
         res = auc.result()
-        logs[f"{self.prefix}_accuracy"] = res
+        logs[f"{self.prefix}_AUC"] = res
         print(f"\nAUC = {res}")
 
     # def on_train_end(self, epoch, logs={}):
 
 
-class AccuracyCallback(tf.keras.callbacks.Callback):
+class PrecisionRecallCallback(tf.keras.callbacks.Callback):
     """
-    Computes the accuracy during the training step, in the end of each epoch. Takes as arguments the input data x, y on which to
+    Computes precision and recall during the training step, in the end of each epoch. Takes as arguments the input data x, y on which to
     compute accuracy. To get the accuracy score on both the training and validation data, create two instances of the model and
     give them as callbacks. To differentiate each instance, you can give a prefix to the metric name in the history object
     returned by the fit() method. A custom callback is dedicated to compute the accuracy since for a VAE, the prediction
@@ -68,8 +68,13 @@ class AccuracyCallback(tf.keras.callbacks.Callback):
         x_pred = self.model.predict(self.gt_images)
         y_pred = is_anormal(self.gt_images, x_pred, criterion=self.criterion, pix_threshold=self.pix_threshold,
                             im_threshold=self.im_threshold)
-        accuracy = tf.keras.metrics.Precision()
-        accuracy.update_state(self.gt_labels, y_pred)
-        res = accuracy.result()
-        logs[f"{self.prefix}_accuracy"] = res * 100
-        print(f" - {self.prefix} accuracy: {res * 100}%")
+        precision = tf.keras.metrics.Precision()
+        recall = tf.keras.metrics.Recall()
+        precision.update_state(self.gt_labels, y_pred)
+        recall.update_state(self.gt_labels, y_pred)
+        precision_res = precision.result().numpy()
+        recall_res = recall.result().numpy()
+        logs[f"{self.prefix}_precision"] = precision_res * 100
+        logs[f"{self.prefix}_recall"] = recall_res * 100
+        print(f" - {self.prefix}_accuracy: {precision_res * 100}%")
+        print(f" - {self.prefix}_recall: {recall_res * 100}%")
