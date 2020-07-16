@@ -97,14 +97,22 @@ def plot_ROC(fpr, tpr, labels=["ROC curve"]):
 
 
 def plot_history(history, metric_names=["reconstruction_loss", "validation_loss", "validation_accuracy"]):
-    fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+    """
+    Plot the values of given loss/metric during train step. Group the similar metrics by row in order to
+    have separate plots (better if the scales of each metrics are different)
+    """
     colors = ["b", "g", "r", "orange", "k", "c", "m", "y"]
 
-    for i, metric in enumerate(metric_names):
-        ax.plot(history.history[metric].numpy(), c=colors[i % len(colors)], label=metric_names[i])
+    fig, axes = plt.subplots(1, metric_names.shape[0], figsize=(20, 8), sharex="all")
+    for row, ax in zip(metric_names, axes.flatten()):
+        for i, metric in enumerate(row):
+            ax.plot(history.history[metric], c=colors[i % len(colors)], label=row[i])
+        ax.legend()
+        ax.set_title("Loss/metric during train step")
+        ax.set_ylabel("loss/metric")
+        ax.set_xlabel("epoch")
 
-    ax.legend()
-    return fig, ax
+    return fig, axes
 
 
 def compute_recall(y_true, y_pred):
