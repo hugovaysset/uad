@@ -1,3 +1,7 @@
+#########################################################################
+# Not supported anymore : see uad.diagnostic.metrics for updated version#
+#########################################################################
+
 import matplotlib.patheffects as PathEffects
 import matplotlib.pyplot as plt
 import numpy as np
