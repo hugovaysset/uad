@@ -37,8 +37,12 @@ def compute_tSNE(dataset, desired_axis=-1):
             elif len(dataset.shape) == 3:
                 batch, x, y = dataset.shape
                 dataset = np.reshape(dataset, (batch, x * y))
+            elif len(dataset.shape) == 2:  # vectors batch for Deep SVDD
+                batch, x = dataset.shape
+                dataset = np.reshpae(dataset, (batch, x))
             else:
-                raise NotImplementedError("Input dataset should either be 3 or 2-rank tensor")
+                raise NotImplementedError(
+                    "Input dataset should either be 3 or 2-rank tensor, or batch of vectors with SVDD")
         else:  # merge only non desired axis by taking the mean along each
             axes = range(len(dataset.shape))
             axes = np.delete(axes, desired_axis)
@@ -51,28 +55,36 @@ def compute_tSNE(dataset, desired_axis=-1):
     return TSNE().fit_transform(dataset)
 
 
-def plot_tSNE(dataset, colors, axis=-1, plot_center={"bary": False, "center": False}, plt_ax=None):
+def plot_tSNE(dataset, colors, axis=-1, plot_center=None, plt_ax=None):
     """
     Plot the t-SNE projection of a given dataset
     :param dataset: t-SNE outputs
     :param colors: original labels which serve as colors
-    :param plot_center:
+    :param plot_center: tuple with center coordinates
     :param axis: axis along which to perform t-SNE
     :param plt_ax: matplotlib axis object on which to plot the result
     :return: matplotlib figure, axis, scatter and texts
     """
+    if plot_center.any():
+        dataset = np.concatenate((dataset, plot_center), axis=0)
+        colors = np.concatenate((colors, [-1]), axis=0)
+
     x = compute_tSNE(dataset, desired_axis=axis)
+
+    print(f"t-SNE output shape: {x.shape}")
 
     # choose a color palette with seaborn.
     num_classes = len(np.unique(colors))
     palette = np.array(sns.color_palette("hls", num_classes))
     #     palette = np.array(colors)
 
+    print(num_classes)
+
     # create a scatter plot.
     if plt_ax is None:
         f = plt.figure(figsize=(8, 8))
         plt_ax = plt.subplot(aspect='equal')
-        sc = ax.scatter(x[:, 0], x[:, 1], lw=0, s=40, c=palette[colors.astype(np.int)])
+        sc = plt_ax.scatter(x[:, 0], x[:, 1], lw=0, s=40, c=palette[colors.astype(np.int)])
         plt.xlim(-25, 25)
         plt.ylim(-25, 25)
         plt_ax.axis('on')
@@ -97,14 +109,6 @@ def plot_tSNE(dataset, colors, axis=-1, plot_center={"bary": False, "center": Fa
             PathEffects.Stroke(linewidth=5, foreground="w"),
             PathEffects.Normal()])
         txts.append(txt)
-
-    # plot the center
-    if np.any(plot_center["bary"]):
-        plt_ax.plot(plot_center["bary"][0], plot_center["bary"][1], "x", c="r", markersize=18)
-        plt_ax.text(plot_center["bary"][0], plot_center["bary"][1], "bary", fontsize=20)
-    if np.any(plot_center["center"]):
-        plt_ax.plot(plot_center["center"][0], plot_center["center"][1], "x", c="b", markersize=18)
-        plt_ax.text(plot_center["center"][0], plot_center["center"][1], "center", fontsize=20)
 
     return f, plt_ax, sc, txts
 
