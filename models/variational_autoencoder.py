@@ -64,8 +64,7 @@ class ConvolutionalVAE(Model):
 
         encoder_inputs = layers.Input(shape=(28, 28, 1), name="encoder_inputs")
 
-        paddings = tf.constant([[0, 0], [2, 2], [2, 2], [0,
-                                                         0]])  # shape d x 2 where d is the rank of the tensor and 2 represents "before" and "after"
+        paddings = tf.constant([[0, 0], [2, 2], [2, 2], [0, 0]])  # shape d x 2 where d is the rank of the tensor and 2 represents "before" and "after"
         x = tf.pad(encoder_inputs, paddings, name="pad")
 
         # contracting path
@@ -278,76 +277,3 @@ class VAE(Model):
         return np.squeeze(generated, axis=-1)
 
 
-class SVDD_VAE(Model):
-    """
-    Support Vector Data Description VAE, trained using the associated loss function. The class
-    does not come with a pre-defined achitecture. Build the encoder and decoder using the
-    functional API and pass them to the constructor.
-    """
-
-    def __init__(self, encoder, decoder, dims=(28, 28, 1), latent_dim=2, LAMBDA=1e-6, **kwargs):
-        super(SVDD_VAE, self).__init__(**kwargs)
-        self.dims = dims
-        self.latent_dim = latent_dim
-        self.encoder = encoder
-        self.decoder = decoder
-
-        self.CENTER = 1  # find a way to get mean value after the first forward pass
-        self.LAMBDA = LAMBDA
-
-    def set_center(self, model, data):
-        z_means, z_log_vars, zs = model.encoder.predict(data)
-        self.CENTER = tf.reduce_mean(z_means, axis=0)
-        print(f"Hypersphere center coordinates: {self.CENTER}")
-
-    def train_step(self, data):
-        if isinstance(data, tuple):
-            data = data[0]
-        with tf.GradientTape() as tape:
-            z_mean, z_log_var, z = self.encoder(data)
-            reconstruction = self.decoder(z)
-            reconstruction_loss = tf.reduce_mean(tf.keras.losses.binary_crossentropy(data, reconstruction))
-            reconstruction_loss *= 28 * 28
-
-            size = tf.shape(z_mean)[1] + tf.shape(z_mean)[2] + tf.shape(z_mean)[3]
-            svdd_loss = tf.cast((1 / size), dtype=tf.float32) * tf.norm(
-                tf.norm(z_mean - self.CENTER, axis=-1, ord="euclidean"), axis=(-2, -1), ord="fro")
-            # distance_loss = (1 / size) * tf.cast(tf.norm((z - self.CENTER) ** 2), dtype=tf.double)
-            weight_decay = 0
-            # for lay in self.encoder.layers:
-            #     if lay.trainable_weights != []:
-            #         # first norm: compute the Frobenius norm of each kernel -> (n_feature_maps_input, n_fm_output)
-            #         # second norm: compute the Frobenius norm on the remaining matrix
-            #         weight_decay += tf.cast(tf.norm(tf.norm(lay.trainable_weights[0], axis=(-2, -1), ord="fro") ** 2,
-            #                              axis=(-2, -1), ord="fro"), dtype=tf.float64)
-            # for lay in self.decoder.layers:
-            #     if lay.trainable_weights != []:
-            #         weight_decay += tf.cast(tf.norm(tf.norm(lay.trainable_weights[0], axis=(-2, -1), ord="fro") ** 2,
-            #                              axis=(-2, -1), ord="fro"), dtype=tf.float64)
-            # weight_decay *= self.LAMBDA / 2
-            # svdd_loss = weight_decay + distance_loss
-
-            weight = tf.constant(0.8, dtype=tf.float32)
-            total_loss = (1 - weight) * reconstruction_loss + weight * tf.cast(svdd_loss, dtype=tf.float32)
-        grads = tape.gradient(total_loss, self.trainable_weights)
-        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
-        return {
-            "loss": total_loss,
-            "reconstruction_loss": reconstruction_loss,
-            "svdd_loss": svdd_loss,
-        }
-
-    def call(self, inputs):
-        z_mean, z_log_var, z = self.encoder(inputs)
-        return z_mean, z_log_var, self.decoder(z)
-
-    def generate_sample(self, n):
-        """
-        Generate a random sample in the latent space and returns the decoded images
-        :param n: number of sample to generate
-        :return:
-        """
-        latent_sample = np.array([tf.random.normal((n, self.latent_dim), mean=0.0, stddev=1.0)])
-        latent_sample = np.array(tf.reshape(latent_sample, (n, self.latent_dim)))
-        generated = self.decoder.predict(latent_sample)
-        return np.squeeze(generated, axis=-1)

@@ -74,3 +74,33 @@ class SimpleConvAE(Model):
         x = layers.Activation('sigmoid')(x)
 
         return x
+
+class AE(Model):
+
+    def __init__(self, encoder, decoder):
+        super(SimpleConvAE, self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def train_step(self, data):
+        if isinstance(data, tuple):
+            data = data[0]
+        with tf.GradientTape() as tape:
+            z = self.encoder(data)
+            reconstruction = self.decoder(z)
+            reconstruction_loss = tf.reduce_mean(
+                tf.keras.losses.binary_crossentropy(data, reconstruction)
+            )
+            reconstruction_loss *= 28 * 28
+            total_loss = reconstruction_loss
+        grads = tape.gradient(total_loss, self.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+        return {
+            "loss": total_loss,
+            "reconstruction_loss": reconstruction_loss,
+        }
+
+    def call(self, data):
+        prediction = self.encoder(data)
+        return self.decoder(prediction)
+
