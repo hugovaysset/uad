@@ -1,15 +1,15 @@
 # Several Variational Autoencoder implementations:
 # - ConvolutionalVAE: fully convolutional with pre-defined architecture
 # - VAE: virgin VAE
-# - SVDD_VAE : VAE trained using a SVDD loss function
+# - OC_VAE : VAE trained using a hybrid VAE - SVDD loss function
 
 import numpy as np
 import tensorflow as tf
+from sklearn.metrics import roc_curve, auc
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
-
-from sklearn.metrics import accuracy_score
-from uad.decision.reconstruction import is_anormal
+from uad.decision.oc_vae import anomaly_score
+from uad.diagnostic.metrics import binarize_set
 
 
 class Sampling(layers.Layer):
@@ -64,7 +64,8 @@ class ConvolutionalVAE(Model):
 
         encoder_inputs = layers.Input(shape=(28, 28, 1), name="encoder_inputs")
 
-        paddings = tf.constant([[0, 0], [2, 2], [2, 2], [0, 0]])  # shape d x 2 where d is the rank of the tensor and 2 represents "before" and "after"
+        paddings = tf.constant([[0, 0], [2, 2], [2, 2], [0,
+                                                         0]])  # shape d x 2 where d is the rank of the tensor and 2 represents "before" and "after"
         x = tf.pad(encoder_inputs, paddings, name="pad")
 
         # contracting path
@@ -277,3 +278,103 @@ class VAE(Model):
         return np.squeeze(generated, axis=-1)
 
 
+class OC_VAE(Model):
+    """
+    Hybrid network between a variational autoencoder and a deep-SVDD network. It is trained using a (possibly) weighted
+    sum of reconstruction error, KL-divergence and centripetal loss. The weights regularization is not included because
+    the reconstruction loss should prevent from the sphere collapse phenomenon.
+    """
+
+    def __init__(self, encoder, decoder, dims=(28, 28, 1), latent_dims=(4, 4, 2), LAMBDAS=(0.33, 0.33), **kwargs):
+        super(OC_VAE, self).__init__(**kwargs)
+        self.dims = dims
+        self.latent_dims = latent_dims
+        self.latent_dim = latent_dims[-1]
+        self.encoder = encoder
+        self.decoder = decoder
+
+        self.CENTER = tf.Variable(initial_value=np.ones(latent_dims),
+                                  dtype=tf.float32)  # center of the same size as output
+        self.LAMBDAS = LAMBDAS
+
+    def train_step(self, data):
+        if isinstance(data, tuple):
+            data = data[0]
+
+        with tf.GradientTape() as tape:
+            z_mean, z_log_var, z = self.encoder(data)
+            reconstruction = self.decoder(z)
+
+            reconstruction_loss = tf.reduce_mean(
+                tf.keras.losses.binary_crossentropy(data, reconstruction)  # change to MSE for other images
+            )
+            reconstruction_loss *= 28 * 28
+            kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+            kl_loss = tf.reduce_mean(kl_loss)
+            kl_loss *= -0.5
+            centripetal_loss = tf.math.sqrt(tf.reduce_sum(z_mean - self.CENTER) ** 2)
+            total_loss = (1 - (self.LAMBDAS[0] + self.LAMBDAS[1])) * reconstruction_loss + self.LAMBDAS[0] * kl_loss + \
+                         self.LAMBDAS[1] * centripetal_loss
+
+        grads = tape.gradient(total_loss, self.trainable_weights)
+
+        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+        return {
+            "loss": total_loss,
+            "reconstruction_loss": reconstruction_loss,
+            "centripetal_loss": centripetal_loss,
+            "kl_loss": kl_loss,
+        }
+
+    def test_step(self, data):
+        if isinstance(data, tuple):
+            data = data[0]
+
+        with tf.GradientTape() as tape:
+            z_mean, z_log_var, z = self.encoder(data)
+            reconstruction = self.decoder(z)
+
+            reconstruction_loss = tf.reduce_mean(
+                tf.keras.losses.binary_crossentropy(data, reconstruction)
+            )
+            reconstruction_loss *= 28 * 28
+            kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+            kl_loss = tf.reduce_mean(kl_loss)
+            kl_loss *= -0.5
+            centripetal_loss = tf.math.sqrt(tf.reduce_sum(z_mean - self.CENTER) ** 2)
+            total_loss = (1 - (self.LAMBDAS[0] + self.LAMBDAS[1])) * reconstruction_loss + self.LAMBDAS[0] * kl_loss + \
+                         self.LAMBDAS[1] * centripetal_loss
+
+        return {
+            "loss": total_loss,
+            "reconstruction_loss": reconstruction_loss,
+            "centripetal_loss": centripetal_loss,
+            "kl_loss": kl_loss,
+        }
+
+    def call(self, inputs):
+        z_mean, z_log_var, z = self.encoder(inputs)
+        return self.decoder(z)
+
+    def distance_to_center(self, data):
+        z_mean, z_log_var, z = self.encoder.predict(data)
+        return tf.math.sqrt(tf.reduce_sum(z_mean - self.CENTER) ** 2)
+
+    def score_samples(self, data):
+        """
+        Returns the anomaly scores for data (name of the method inspired from the sklearn
+        interface)
+        :param data: image or batch of images
+        :return: anomaly scores, in a numpy vector or a single value depending on the data type
+        """
+        return anomaly_score(self, data).numpy()
+
+    def is_anormal(self, data, im_threshold=0):
+        scores = self.score_samples(data)
+        return binarize_set(scores > im_threshold)
+
+    def compute_ROC(self, y_true, y_score):
+        return roc_curve(y_true, y_score)
+
+    def compute_AUC(self, fprs, tprs):
+        return auc(fprs, tprs)

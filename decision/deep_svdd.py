@@ -28,6 +28,3 @@ def anomaly_score_from_images(model, images):
     """
     predictions = model.predict(images)
     return anomaly_score_from_predictions(model, predictions)
-
-def is_anormal(model, predictions, threshold):
-    pass
