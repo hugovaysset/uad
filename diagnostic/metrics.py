@@ -77,6 +77,13 @@ def plot_ROC(fpr, tpr, labels=["ROC curve"]):
     :param labels: str or list: labels to give to each curve
     :return:
     """
+    if type(fpr) == list:
+        fpr = np.array(fpr)
+    if type(tpr) == list:
+        tpr = np.array(tpr)
+    if type(labels) == list:
+        labels = np.array(labels)
+
     colours = ['r', 'g', 'b', 'm', 'y', 'k']
     symbols = ['*', '.', '-', '--', '^', 'v']
     fig, ax = plt.subplots(1, 1, figsize=(7, 7), sharex="all", sharey="all")
@@ -84,11 +91,12 @@ def plot_ROC(fpr, tpr, labels=["ROC curve"]):
     ax.set_xlabel("False positive rate")
     ax.set_ylabel("True positive rate")
     fig.suptitle("ROC curve")
-    if len(fpr.shape) == 1:
+    if fpr.shape == (1,): # single curve
         ax.plot(fpr, tpr, '.', c="orange")
         ax.plot(fpr, tpr, c="orange", label=f"{labels[0]} (AUC = {round(compute_AUC(fpr, tpr), 3)})")
-    else:
+    else:  # several curves to plot
         for i, (f, t, lab) in enumerate(zip(fpr, tpr, labels)):
+            print(f.shape, t.shape)
             ax.plot(f, t, ".", f"{colours[i % len(colours)]}.")
             ax.plot(f, t, f"{colours[i % len(colours)]}.", label=f"{lab} (AUC = {round(compute_AUC(f, t), 3)})")
     ax.legend()

@@ -113,6 +113,58 @@ def plot_tSNE(dataset, colors, axis=-1, plot_center=None, plt_ax=None):
     return f, plt_ax, sc, txts
 
 
+def plot_tSNE_per_pixel(dataset, colors):
+    """
+    Plot the t-SNE projection of a given dataset. The dataset is a batch of 3-tensors
+    and the function makes as many plots as pixels in the dataset (typically used when
+    the latent space is a tensor space)
+    :param dataset: t-SNE outputs
+    :param colors: original labels which serve as colors
+
+    :return: matplotlib figure, axis, scatter and texts
+    """
+
+    plots = []  # rows and columns but not depth
+    for x in range(dataset.shape[1]):  # rows
+        for y in range(dataset.shape[1]): # columns
+            pixs = dataset[:, x, y]  # batch of super-pixel
+            print(pixs.shape)
+            tsne = TSNE().fit_transform(pixs)
+            plots.append(tsne)
+
+    plots = np.array(plots).reshape(dataset.shape[:2])
+
+    fig, axes = plt.subplots(dataset.shape[1], dataset.shape[2], figsize=(20, 20))
+
+    # choose a color palette with seaborn.
+    num_classes = len(np.unique(colors))
+    palette = np.array(sns.color_palette("hls", num_classes))
+    #     palette = np.array(colors)
+
+    txts, scs = [], []
+    # create a scatter plot.
+    for i, j in zip(range(plots.shape[1]), range(plots.shape[2])):
+        ax, x_sne, y_sne = axes[i][j], plots[:, i, j, 0], plots[:, i, j, 1]
+        scs.append(ax.scatter(x_sne, y_sne, lw=0, s=40, c=palette[colors.astype(np.int)]))
+        plt.xlim(-25, 25)
+        plt.ylim(-25, 25)
+        ax.axis('on')
+        ax.axis('tight')
+
+        # add the labels for each digit corresponding to the label
+        for i in range(num_classes):
+            # Position of each label at median of data points.
+
+            xtext, ytext = np.median(x[colors == i, :], axis=0)
+            txt = ax.text(xtext, ytext, str(i), fontsize=24)
+            txt.set_path_effects([
+                PathEffects.Stroke(linewidth=5, foreground="w"),
+                PathEffects.Normal()])
+            txts.append(txt)
+
+    return fig, axes, scs, txts
+
+
 def get_barycentre(predictions, axis=-1, output_shape=(1, 4 * 4 * 8)):
     """
     Returns the barycentre of a given dataset

@@ -285,7 +285,7 @@ class OC_VAE(Model):
     the reconstruction loss should prevent from the sphere collapse phenomenon.
     """
 
-    def __init__(self, encoder, decoder, dims=(28, 28, 1), latent_dims=(4, 4, 2), LAMBDAS=(0.33, 0.33), **kwargs):
+    def __init__(self, encoder, decoder, dims=(28, 28, 1), latent_dims=(4, 4, 16), LAMBDAS=(0.33, 0.33), **kwargs):
         super(OC_VAE, self).__init__(**kwargs)
         self.dims = dims
         self.latent_dims = latent_dims
@@ -326,6 +326,10 @@ class OC_VAE(Model):
             "kl_loss": kl_loss,
         }
 
+    def set_center(self, new_center):
+        self.CENTER = new_center
+        tf.print(f"Hypersphere center coordinates: {self.CENTER}")
+
     def test_step(self, data):
         if isinstance(data, tuple):
             data = data[0]
@@ -360,21 +364,25 @@ class OC_VAE(Model):
         z_mean, z_log_var, z = self.encoder.predict(data)
         return tf.math.sqrt(tf.reduce_sum(z_mean - self.CENTER) ** 2)
 
-    def score_samples(self, data):
+    def score_samples(self, data, decision_function="distance", batch=True):
         """
         Returns the anomaly scores for data (name of the method inspired from the sklearn
         interface)
         :param data: image or batch of images
+        :param decision_func: can be either "distance" to predict anomalies based on their distance to the model's center
+        (in an SVDD manner) or "reconstruction" to predict anomalies based on the reconstruction error between the input
+        image and the reconstruction (using MSE, in a VAE manner).
+        :param batch: True if the given data is a batch
         :return: anomaly scores, in a numpy vector or a single value depending on the data type
         """
-        return anomaly_score(self, data).numpy()
+        return - anomaly_score(self, data, decision_func=decision_function, batch=batch).numpy()
 
     def is_anormal(self, data, im_threshold=0):
         scores = self.score_samples(data)
         return binarize_set(scores > im_threshold)
 
     def compute_ROC(self, y_true, y_score):
-        return roc_curve(y_true, y_score)
+        return roc_curve(y_true, y_score, pos_label=0)
 
     def compute_AUC(self, fprs, tprs):
         return auc(fprs, tprs)
