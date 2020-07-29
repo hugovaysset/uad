@@ -226,7 +226,7 @@ class VAE(Model):
             # compute loss, cannot just use built-in loss
             # because loss not only dependson y_pred, y_true
             # but also on z_mean, z_log_var... Signature mismatch
-            if self.reconstruction_loss == "xent"
+            if self.reconstruction_loss == "xent":
                 reconstruction_loss = tf.reduce_mean(
                     tf.keras.losses.binary_crossentropy(data, reconstruction)
                 )
