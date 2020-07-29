@@ -197,12 +197,19 @@ class VAE(Model):
     a custom VAE model.
     """
 
-    def __init__(self, encoder, decoder, dims=(28, 28, 1), latent_dim=2, **kwargs):
+    def __init__(self, encoder, decoder, dims=(28, 28, 1), reconstruction_loss="mse", **kwargs):
+        """
+        :param encoder:
+        :param decoder:
+        :param dims:
+        :param reconstruction_loss: name of the reconstruction loss to use (can be "xent" for MNIST or "mse" for real
+        images
+        """
         super(VAE, self).__init__(**kwargs)
         self.dims = dims
-        self.latent_dim = latent_dim
         self.encoder = encoder
         self.decoder = decoder
+        self.reconstruction_loss = reconstruction_loss
 
     def train_step(self, data):
         if isinstance(data, tuple):
@@ -219,10 +226,15 @@ class VAE(Model):
             # compute loss, cannot just use built-in loss
             # because loss not only dependson y_pred, y_true
             # but also on z_mean, z_log_var... Signature mismatch
-            reconstruction_loss = tf.reduce_mean(
-                tf.keras.losses.binary_crossentropy(data, reconstruction)
-            )
-            reconstruction_loss *= 28 * 28
+            if self.reconstruction_loss == "xent"
+                reconstruction_loss = tf.reduce_mean(
+                    tf.keras.losses.binary_crossentropy(data, reconstruction)
+                )
+                reconstruction_loss *= self.dims[0] * self.dims[1]
+            elif self.reconstruction_loss == "mse":
+                reconstruction_loss = tf.keras.losses.MSE(data, reconstruction)
+            else:
+                raise NotImplementedError("Reconstruction loss should be either xent or mse")
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
             kl_loss = tf.reduce_mean(kl_loss)
             kl_loss *= -0.5
@@ -265,17 +277,6 @@ class VAE(Model):
     def call(self, inputs):
         z_mean, z_log_var, z = self.encoder(inputs)
         return self.decoder(z)
-
-    def generate_sample(self, n):
-        """
-        Generate a random sample in the latent space and returns the decoded images
-        :param n: number of sample to generate
-        :return:
-        """
-        latent_sample = np.array([tf.random.normal((n, self.latent_dim), mean=0.0, stddev=1.0)])
-        latent_sample = np.array(tf.reshape(latent_sample, (n, self.latent_dim)))
-        generated = self.decoder.predict(latent_sample)
-        return np.squeeze(generated, axis=-1)
 
 
 class OC_VAE(Model):
