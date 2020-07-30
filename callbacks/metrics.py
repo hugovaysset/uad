@@ -3,7 +3,6 @@ import tensorflow as tf
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_curve
 from uad.decision.reconstruction import is_anormal
-from uad.diagnostic.metrics import compute_recall, compute_precision, compute_f1
 
 class AUCCallback(tf.keras.callbacks.Callback):
     """

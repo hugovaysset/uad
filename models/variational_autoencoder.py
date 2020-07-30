@@ -23,31 +23,6 @@ class Sampling(layers.Layer):
         return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
 
-def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True, activation1="sigmoid",
-                 activation2="sigmoid"):
-    """Function to add 2 convolutional layers with the parameters passed to it
-    activation1: name of the activation function to apply. If none, pass "" (empty string)
-    activation2: name of the activation function to apply. If none, pass "" (empty string)
-    """
-    # first layer
-    x = layers.Conv2D(filters=n_filters, kernel_size=(kernel_size, kernel_size), \
-                      kernel_initializer='he_normal', padding='same')(input_tensor)
-    if batchnorm:
-        x = layers.BatchNormalization()(x)
-    if activation1 != "":
-        x = layers.Activation(activation1)(x)
-
-    # second layer
-    x = layers.Conv2D(filters=n_filters, kernel_size=(kernel_size, kernel_size), \
-                      kernel_initializer='he_normal', padding='same')(input_tensor)
-    if batchnorm:
-        x = layers.BatchNormalization()(x)
-    if activation2 != "":
-        x = layers.Activation(activation2)(x)
-
-    return x
-
-
 class ConvolutionalVAE(Model):
     """
     Implements a Variational Autoencoder with a pre-defined architecture inspired from the
@@ -56,7 +31,7 @@ class ConvolutionalVAE(Model):
     function. Well suited for MNIST dataset
     """
 
-    def __init__(self, latent_dim, n_filters=16, k_size=3, batchnorm=False, dropout=0.2):
+    def __init__(self, latent_dim, n_filters=16, k_size=3, batchnorm=False, dropout=0.2, activation_func="relu"):
         super(ConvolutionalVAE, self).__init__()
         self.latent_dim = latent_dim
 
@@ -69,15 +44,16 @@ class ConvolutionalVAE(Model):
         x = tf.pad(encoder_inputs, paddings, name="pad")
 
         # contracting path
-        x = self.conv2d_block(x, n_filters * 1, kernel_size=k_size, batchnorm=batchnorm)
+        x = self.conv2d_block(x, n_filters * 1, kernel_size=k_size, batchnorm=batchnorm, activation=activation_func)
         x = layers.MaxPooling2D((2, 2))(x)
         x = layers.Dropout(dropout)(x)
 
-        x = self.conv2d_block(x, n_filters * 2, kernel_size=k_size, batchnorm=batchnorm)
+        x = self.conv2d_block(x, n_filters * 2, kernel_size=k_size, batchnorm=batchnorm, activation=activation_func)
         x = layers.MaxPooling2D((2, 2))(x)
         x = layers.Dropout(dropout)(x)
 
-        x = self.conv2d_block(x, n_filters=n_filters * 4, kernel_size=k_size, batchnorm=batchnorm)
+        x = self.conv2d_block(x, n_filters=n_filters * 4, kernel_size=k_size, batchnorm=batchnorm,
+                              activation=activation_func)
         x = layers.MaxPooling2D((2, 2))(x)
         x = layers.Dropout(dropout)(x)
 
@@ -93,36 +69,50 @@ class ConvolutionalVAE(Model):
         x = layers.Conv2DTranspose(n_filters * 4, (k_size, k_size), strides=(2, 2), padding='same', name="u6")(
             latent_inputs)
         x = layers.Dropout(dropout)(x)
-        x = self.conv2d_block(x, n_filters * 4, kernel_size=k_size, batchnorm=batchnorm)
+        x = self.conv2d_block(x, n_filters * 4, kernel_size=k_size, batchnorm=batchnorm, activation=activation_func)
 
         x = layers.Conv2DTranspose(n_filters * 2, (k_size, k_size), strides=(2, 2), padding='same', name="u7")(x)
         x = layers.Dropout(dropout)(x)
-        x = self.conv2d_block(x, n_filters * 2, kernel_size=k_size, batchnorm=batchnorm)
+        x = self.conv2d_block(x, n_filters * 2, kernel_size=k_size, batchnorm=batchnorm, activation=activation_func)
 
         x = layers.Conv2DTranspose(n_filters * 1, (k_size, k_size), strides=(2, 2), padding='same', name="u8")(x)
         x = layers.Dropout(dropout)(x)
-        decoder_outputs = self.conv2d_block(x, 1, kernel_size=k_size, batchnorm=batchnorm)
+        decoder_outputs = self.conv2d_block(x, 1, kernel_size=k_size, batchnorm=batchnorm, activation=activation_func)
         crop = tf.image.resize_with_crop_or_pad(decoder_outputs, 28, 28)
 
         self.decoder = Model(inputs=latent_inputs, outputs=crop, name="decoder")
 
-    def conv2d_block(self, input_tensor, n_filters, kernel_size=3, batchnorm=True):
-        """Function to add 2 convolutional layers with the parameters passed to it"""
+    def conv2d_block(self, input_tensor, n_filters, kernel_size=(3, 1), batchnorm=True,
+                     activation="relu"):
+        """Function to add 2 convolutional layers with the parameters passed to it
+        activation1: name of the activation function to apply. If none, pass "" (empty string)
+        activation2: name of the activation function to apply. If none, pass "" (empty string)
+        """
         # first layer
-        c1 = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
-                           kernel_initializer='he_normal', padding='same')(input_tensor)
+        x = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
+                          kernel_initializer='he_normal', padding='same')(input_tensor)
         if batchnorm:
-            c1 = layers.BatchNormalization()(c1)
-        c1 = layers.Activation('sigmoid')(c1)
+            x = layers.BatchNormalization()(x)
+        if activation == "relu" or activation == "sigmoid" or activation == "linear":
+            x = layers.Activation(activation)(x)
+        elif activation == "leaky_relu":
+            x = tf.keras.layers.LeakyReLU(alpha=0.3)(x)
+        else:
+            raise NotImplementedError("activation function should be given by a valid string of leaky_relu")
 
         # second layer
-        c1 = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
-                           kernel_initializer='he_normal', padding='same')(input_tensor)
+        x = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
+                          kernel_initializer='he_normal', padding='same')(x)
         if batchnorm:
-            c1 = layers.BatchNormalization()(c1)
-        c1 = layers.Activation('sigmoid')(c1)
+            x = layers.BatchNormalization()(x)
+        if activation == "relu" or activation == "sigmoid" or activation == "linear":
+            x = layers.Activation(activation)(x)
+        elif activation == "leaky_relu":
+            x = tf.keras.layers.LeakyReLU(alpha=0.3)(x)
+        else:
+            raise NotImplementedError("activation function should be given by a valid string of leaky_relu")
 
-        return c1
+        return x
 
     def train_step(self, data):
         if isinstance(data, tuple):
@@ -215,17 +205,11 @@ class VAE(Model):
         if isinstance(data, tuple):
             data = data[0]
 
-        # record all the performed operations in order to perform
-        # backprop after
         with tf.GradientTape() as tape:
-            # predict
-            # why not use self.call(data, reconstruction)?
+
             z_mean, z_log_var, z = self.encoder(data)
             reconstruction = self.decoder(z)
 
-            # compute loss, cannot just use built-in loss
-            # because loss not only dependson y_pred, y_true
-            # but also on z_mean, z_log_var... Signature mismatch
             if self.reconstruction_loss == "xent":
                 reconstruction_loss = tf.reduce_mean(
                     tf.keras.losses.binary_crossentropy(data, reconstruction)
@@ -240,12 +224,9 @@ class VAE(Model):
             kl_loss *= -0.5
             total_loss = reconstruction_loss + kl_loss
 
-        # compute gradient of total loss / weights thanks to recorded
-        # operations in the with tf.GradientTape() scope
         grads = tape.gradient(total_loss, self.trainable_weights)
-
-        # optimizer defined at compilation
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+
         return {
             "loss": total_loss,
             "reconstruction_loss": reconstruction_loss,
@@ -260,14 +241,20 @@ class VAE(Model):
             z_mean, z_log_var, z = self.encoder(data)
             reconstruction = self.decoder(z)
 
-            reconstruction_loss = tf.reduce_mean(
-                tf.keras.losses.binary_crossentropy(data, reconstruction)
-            )
-            reconstruction_loss *= 28 * 28
+            if self.reconstruction_loss == "xent":
+                reconstruction_loss = tf.reduce_mean(
+                    tf.keras.losses.binary_crossentropy(data, reconstruction)
+                )
+                reconstruction_loss *= self.dims[0] * self.dims[1]
+            elif self.reconstruction_loss == "mse":
+                reconstruction_loss = tf.keras.losses.MSE(data, reconstruction)
+            else:
+                raise NotImplementedError("Reconstruction loss should be either xent or mse")
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
             kl_loss = tf.reduce_mean(kl_loss)
             kl_loss *= -0.5
             total_loss = reconstruction_loss + kl_loss
+
         return {
             "loss": total_loss,
             "reconstruction_loss": reconstruction_loss,
