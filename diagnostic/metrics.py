@@ -5,6 +5,7 @@ from keras import backend as K
 from sklearn.metrics import roc_curve, auc
 from uad.decision.reconstruction import decision_function
 
+
 def is_binary(labels):
     l = []
     for elt in labels:
@@ -69,6 +70,49 @@ def compute_AUC_on_all(model_class, x_train, x_test, y_test, n_classes=10, epoch
     return np.array(auc_scores)
 
 
+def score_samples_iterator(model, dataset_iterator):
+    """
+    Compute scores (mse) between images and predictions.
+    :param model: generic model, has to implement a predict() method
+    :param dataset_iterator: iterator of MultiChannelIterator type
+    Return: scores in the batch format
+    """
+    scores = []
+    for i in range(len(dataset_iterator)):  # itere a l'infini???
+        (ims, labs), _ = dataset_iterator[i]
+        if i % 50 == 0:
+            print(f"making predictions on batch {i}...")
+        predictions = model.predict(ims)
+        y_scores = np.sum((predictions - ims) ** 2, axis=(1, 2, 3))
+        scores.append(y_scores)
+
+    return np.array(scores)
+
+
+def compute_ROC_iterator(model, dataset_iterator, interest_digit=7):
+    """
+    :param dataset_iterator: expected to be in the format given by
+    MultiChannelIterator with (bx, by) == dataset_iterator[0] and then
+    (images_x, labels_x) == bx
+    """
+    labels = []
+    for i in range(len(dataset_iterator)):
+        (ims, y_true), _ = dataset_iterator[i]
+        labels.append(y_true.squeeze(-1))
+    y_trues = np.array(labels).flatten()
+
+    y_scores = score_samples_iterator(model, dataset_iterator).flatten()
+
+    if not is_binary(y_trues):
+        y_true_bin = binarize_set(y_trues, interest=interest_digit)
+    else:
+        y_true_bin = y_trues
+
+    fpr, tpr, thresholds = roc_curve(y_true_bin, y_scores)
+
+    return fpr, tpr, thresholds
+
+
 def plot_ROC(fpr, tpr, labels=["ROC curve"]):
     """
     Plot the ROC curves from false positives rate and true positives rate
@@ -91,7 +135,7 @@ def plot_ROC(fpr, tpr, labels=["ROC curve"]):
     ax.set_xlabel("False positive rate")
     ax.set_ylabel("True positive rate")
     fig.suptitle("ROC curve")
-    if fpr.shape == (1,): # single curve
+    if len(fpr.shape) == 1:  # single curve
         ax.plot(fpr, tpr, '.', c="orange")
         ax.plot(fpr, tpr, c="orange", label=f"{labels[0]} (AUC = {round(compute_AUC(fpr, tpr), 3)})")
     else:  # several curves to plot
@@ -155,11 +199,6 @@ def compute_recall(y_true, y_pred):
 def compute_precision(y_true, y_pred):
     true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
     predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
-    precision = tf.cast(true_positives, dtype=tf.float32) / (tf.cast(predicted_positives, dtype=tf.float32) + K.epsilon())
+    precision = tf.cast(true_positives, dtype=tf.float32) / (
+                tf.cast(predicted_positives, dtype=tf.float32) + K.epsilon())
     return precision
-
-
-def compute_f1(y_true, y_pred):
-    precision = precision_m(y_true, y_pred)
-    recall = recall_m(y_true, y_pred)
-    return 2 * ((precision * recall) / (precision + recall + K.epsilon()))
