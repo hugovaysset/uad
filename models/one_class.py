@@ -102,41 +102,6 @@ class DeepSVDD(Model):
         return np.array(auc_scores)
 
 
-def get_ruff_model():
-    n_filters = (16, 32, 64)
-    dense_shape = 32
-    LAMBDA = 1e-6
-
-    inputs = tf.keras.Input(shape=(28, 28, 1))
-    paddings = tf.constant([[0, 0], [2, 2], [2, 2], [0,
-                                                     0]])  # shape d x 2 where d is the rank of the tensor and 2 represents "before" and "after"
-    x = tf.pad(inputs, paddings, name="pad")
-
-    c1 = layers.Conv2D(filters=n_filters[0], kernel_size=5, strides=(1, 1), kernel_regularizer=l2(LAMBDA),
-                       padding="same", name=f"conv_1")(x)
-    b1 = layers.BatchNormalization()(c1)
-    a1 = layers.LeakyReLU(alpha=0.1, name=f"activation_1")(c1)
-    mp1 = layers.MaxPooling2D((2, 2), name=f"max_pooling_1")(a1)
-
-    c2 = layers.Conv2D(filters=n_filters[1], kernel_size=5, strides=(1, 1), kernel_regularizer=l2(LAMBDA),
-                       padding="same", name=f"conv_2")(mp1)
-    b2 = layers.BatchNormalization()(c2)
-    a2 = layers.LeakyReLU(alpha=0.1, name=f"activation_2")(b2)
-    mp2 = layers.MaxPooling2D((2, 2), name=f"max_pooling_2")(a2)
-
-    c3 = layers.Conv2D(filters=n_filters[2], kernel_size=5, strides=(1, 1), kernel_regularizer=l2(LAMBDA),
-                       padding="same", name=f"conv_3")(mp2)
-    b3 = layers.BatchNormalization()(c3)
-    a3 = layers.LeakyReLU(alpha=0.1, name=f"activation_3")(b3)
-    mp3 = layers.MaxPooling2D((2, 2), name=f"max_pooling_3")(a3)
-    f3 = layers.Flatten()(mp3)
-
-    d4 = layers.Dense(64, kernel_regularizer=l2(LAMBDA))(f3)
-    outputs = layers.Dense(32, kernel_regularizer=l2(LAMBDA))(d4)
-
-    return tf.keras.Model(inputs, outputs)
-
-
 def conv2d_block(input_tensor, n_filters, kernel_size=3, LAMBDA=1e-6):
     """Function to add 2 convolutional layers with the parameters passed to it
     activation1: name of the activation function to apply. If none, pass "" (empty string)
