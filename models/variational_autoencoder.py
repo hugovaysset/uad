@@ -9,7 +9,7 @@ from sklearn.metrics import roc_curve, auc
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
 from uad.decision.oc_vae import anomaly_score
-from uad.diagnostic.metrics import binarize_set
+from uad.diagnostic.metrics import binarize_set, is_binary
 
 
 class Sampling(layers.Layer):
@@ -187,7 +187,7 @@ class VAE(Model):
     a custom VAE model.
     """
 
-    def __init__(self, encoder, decoder, dims=(28, 28, 1), reconstruction_loss="mse", **kwargs):
+    def __init__(self, encoder, decoder, dims=(28, 28, 1), reconstruction_loss="mse", BETA=1, **kwargs):
         """
         :param encoder:
         :param decoder:
@@ -200,6 +200,8 @@ class VAE(Model):
         self.encoder = encoder
         self.decoder = decoder
         self.reconstruction_loss = reconstruction_loss
+
+        self.BETA = BETA
 
     def train_step(self, data):
         if isinstance(data, tuple):
@@ -222,7 +224,7 @@ class VAE(Model):
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
             kl_loss = tf.reduce_mean(kl_loss)
             kl_loss *= -0.5
-            total_loss = reconstruction_loss + kl_loss
+            total_loss = reconstruction_loss + self.BETA * kl_loss
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
@@ -273,14 +275,15 @@ class OC_VAE(Model):
     the reconstruction loss should prevent from the sphere collapse phenomenon.
     """
 
-    def __init__(self, encoder, decoder, dims=(28, 28, 1), latent_dims=(4, 4, 16), LAMBDAS=(0.33, 0.33), **kwargs):
+    def __init__(self, encoder, decoder, input_dims=(28, 28, 1), latent_dims=(4, 4, 16),
+                 LAMBDAS=(0.33, 0.33), reconstruction_loss="mse", **kwargs):
         super(OC_VAE, self).__init__(**kwargs)
-        self.dims = dims
+        self.input_dims = input_dims
         self.latent_dims = latent_dims
         self.latent_dim = latent_dims[-1]
         self.encoder = encoder
         self.decoder = decoder
-
+        self.reconstruction_loss = reconstruction_loss
         self.CENTER = tf.Variable(initial_value=np.ones(latent_dims),
                                   dtype=tf.float32)  # center of the same size as output
         self.LAMBDAS = LAMBDAS
@@ -326,14 +329,22 @@ class OC_VAE(Model):
             z_mean, z_log_var, z = self.encoder(data)
             reconstruction = self.decoder(z)
 
-            reconstruction_loss = tf.reduce_mean(
-                tf.keras.losses.binary_crossentropy(data, reconstruction)
-            )
-            reconstruction_loss *= 28 * 28
+            if self.reconstruction_loss == "xent":
+                reconstruction_loss = tf.reduce_mean(
+                    tf.keras.losses.binary_crossentropy(data, reconstruction)
+                )
+                reconstruction_loss *= self.input_dimsms[0] * self.input_dims[1]
+            elif self.reconstruction_loss == "mse":
+                reconstruction_loss = tf.keras.losses.MSE(data, reconstruction)
+            else:
+                raise NotImplementedError("Reconstruction loss should be either xent or mse")
+
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
             kl_loss = tf.reduce_mean(kl_loss)
             kl_loss *= -0.5
+
             centripetal_loss = tf.math.sqrt(tf.reduce_sum(z_mean - self.CENTER) ** 2)
+
             total_loss = (1 - (self.LAMBDAS[0] + self.LAMBDAS[1])) * reconstruction_loss + self.LAMBDAS[0] * kl_loss + \
                          self.LAMBDAS[1] * centripetal_loss
 
@@ -365,6 +376,31 @@ class OC_VAE(Model):
         """
         return - anomaly_score(self, data, decision_func=decision_function, batch=batch).numpy()
 
+    def score_samples_iterator(self, dataset_iterator, decision_function="distance", batch=True):
+        """
+        Returns the anomaly scores for data (name of the method inspired from the sklearn
+        interface) when data is given in an iterator
+        :param dataset_iterator: image or batch of images
+        :param decision_function: can be either "distance" to predict anomalies based on their distance to the model's center
+        (in an SVDD manner) or "reconstruction" to predict anomalies based on the reconstruction error between the input
+        image and the reconstruction (using MSE, in a VAE manner).
+        Return: scores in the batch format
+        """
+        scores = []
+        for i in range(len(dataset_iterator)):  # itere a l'infini???
+            _, (ims, labs) = dataset_iterator[i]
+            if (i + 1) % 50 == 0:
+                print(f"making predictions on batch {i + 1}...")
+            if decision_function == "distance":
+                predictions = self.encoder.predict(ims)
+            elif decision_function == "reconstruction":
+                predictions = self.predict(ims)
+            else:
+                raise NotImplementedError("decision function should be either 'distance' or 'reconstruction'")
+            y_scores = anomaly_score(self, dataset_iterator[i], decision_func=decision_function, batch=batch)
+            scores.append(y_scores)
+        return np.array(scores)
+
     def is_anormal(self, data, im_threshold=0):
         scores = self.score_samples(data)
         return binarize_set(scores > im_threshold)
@@ -372,5 +408,57 @@ class OC_VAE(Model):
     def compute_ROC(self, y_true, y_score):
         return roc_curve(y_true, y_score, pos_label=0)
 
+    def compute_ROC_iterator(self, dataset_iterator, decision_function="distance", batch=True, interest_digit=7):
+        """
+        :param dataset_iterator:
+        :param decision_function:
+        :param batch:
+        :param interest_digit:
+        :return:
+        """
+        labels = []
+        for i in range(len(dataset_iterator)):
+            _, (ims, y_true) = dataset_iterator[i]
+            labels.append(y_true.squeeze(-1))
+        y_trues = np.array(labels).flatten()
+
+        y_scores = self.score_samples_iterator(dataset_iterator, decision_function=decision_function).flatten()
+
+        if not is_binary(y_trues):
+            y_true_bin = binarize_set(y_trues, interest=interest_digit)
+        else:
+            y_true_bin = y_trues
+
+        fpr, tpr, thresholds = roc_curve(y_true_bin, y_scores)
+
+        return fpr, tpr, thresholds
+
     def compute_AUC(self, fprs, tprs):
         return auc(fprs, tprs)
+
+    def plot_scores_distrib(self, dataset_iterator, decision_function=True, batch=True, interest_class=7):
+        """
+        Plot the distribution of anomaly scores computed on dataset_iterator, for
+        the normal class and for the anormal class
+        :param dataset_iterator:
+        :param interest_class:
+        :return:
+        """
+        labs = []
+        for i in range(len(dataset_iterator)):
+            _, (ims, lab) = dataset_iterator[i]
+            labs.append(lab)
+        labs = np.array(labs).squeeze(-1).flatten()
+
+        sc = self.score_samples_iterator(dataset_iterator, decision_function=decision_function, batch=batch).flatten()
+
+        scores_nominal = sc[labs == interest_class]
+        scores_anormal = sc[labs != interest_class]
+
+        fig, axes = plt.subplots(1, 2, figsize=(15, 8))
+        axes[0].hist(scores_nominal)
+        axes[0].set_title("anomaly scores for nominal class")
+        axes[1].hist(scores_anormal)
+        axes[1].set_title("anomaly scores for anormal class")
+
+        return fig, axes

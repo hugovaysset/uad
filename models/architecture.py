@@ -113,8 +113,7 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
 
     return encoder, decoder
 
-
-def get_ruff_svdd(input_dims=(32, 32, 3), n_filters=(32, 64, 128), dense_sizes=(64, 2), k_size=(5, 5, 1), LAMBDA=1e-6,
+def get_ruff_svdd(input_dims=(32, 32, 3), n_filters=(32, 64, 128), dense_sizes=(64, 2), k_size=(5, 5), LAMBDA=1e-6,
                   spatial_dropout=0.2, dropout=0, batchnorm=False):
     """
     LeNet-type architecture descirbed by Ruff et al. in their publication
@@ -135,10 +134,10 @@ def get_ruff_svdd(input_dims=(32, 32, 3), n_filters=(32, 64, 128), dense_sizes=(
     for i in range(n_blocks):
         if i == 0:
             x = layers.Conv2D(filters=n_filters[0], kernel_size=k_size, strides=(1, 1), kernel_regularizer=l2(LAMBDA),
-                              padding="same", name=f"conv_1")(inputs)
+                              padding="same", name=f"conv_1", use_bias=False)(inputs)
         else:
             x = layers.Conv2D(filters=n_filters[0], kernel_size=5, strides=(1, 1), kernel_regularizer=l2(LAMBDA),
-                              padding="same")(x)
+                              padding="same", use_bias=False)(x)
         if spatial_dropout != 0:
             x = layers.SpatialDropout2D(spatial_dropout)(x)
         if dropout != 0:
@@ -153,11 +152,11 @@ def get_ruff_svdd(input_dims=(32, 32, 3), n_filters=(32, 64, 128), dense_sizes=(
     # denses
     n_denses = len(dense_sizes)
     for i in range(n_denses):
-        x = layers.Dense(dense_sizes[i], kernel_regularizer=l2(LAMBDA))(x)
+        x = layers.Dense(dense_sizes[i], kernel_regularizer=l2(LAMBDA), use_bias=False)(x)
 
     return tf.keras.Model(inputs, x)
 
-def get_ruff_vae(input_dims=(32, 32, 3), n_filters=(32, 64, 128), k_size=(5, 5, 1), LAMBDA=1e-6,
+def get_ruff_vae(input_dims=(32, 32, 3), n_filters=(32, 64, 128), k_size=(5, 5), LAMBDA=1e-6,
                   spatial_dropout=0.2, dropout=0, batchnorm=False):
     """
     LeNet-type architecture descirbed by Ruff et al. in their publication
@@ -194,8 +193,8 @@ def get_ruff_vae(input_dims=(32, 32, 3), n_filters=(32, 64, 128), k_size=(5, 5, 
     latent_depth = n_filters * int(2 ** n_contractions)
     latent_dims = (int(input_dims[0] / (2 ** n_contractions)), int(input_dims[1] / (2 ** n_contractions)), latent_depth)
 
-    z_mean = layers.Conv2D(latent_dims, 1, strides=1, name="z_mean")(x)
-    z_log_var = layers.Conv2D(latent_dims, 1, strides=1, name="z_log_var")(x)
+    z_mean = layers.Conv2D(latent_depth, 1, strides=1, name="z_mean")(x)
+    z_log_var = layers.Conv2D(latent_depth, 1, strides=1, name="z_log_var")(x)
     z = Sampling()((z_mean, z_log_var))
 
     encoder = Model(inputs, [z_mean, z_log_var, z], name="encoder")

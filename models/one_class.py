@@ -1,12 +1,12 @@
+import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import roc_curve, roc_auc_score, auc
+from sklearn.metrics import roc_curve, auc
 import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
-from tensorflow.keras.constraints import Constraint
-from uad.decision.deep_svdd import anomaly_score_from_predictions, anomaly_score_from_images, is_anormal
-from uad.diagnostic.metrics import binarize_set
+from uad.decision.deep_svdd import anomaly_score_from_predictions, anomaly_score_from_images
+from uad.diagnostic.metrics import binarize_set, is_binary
 
 
 class DeepSVDD(Model):
@@ -15,7 +15,7 @@ class DeepSVDD(Model):
     trained on the objective function.
     """
 
-    def __init__(self, model, n_filters=(8, 4), dense_shape=32, LAMBDA=1e-6, **kwargs):
+    def __init__(self, model, dense_shape=32, LAMBDA=1e-6, **kwargs):
         """
         If inputs is None and outputs is None: builds a DeepSVDD network with a LeNet architecture as used in Ruff 2018
         Else give input and outputs to build a model via subclassing
@@ -73,6 +73,23 @@ class DeepSVDD(Model):
         """
         return (anomaly_score_from_images(self, data)).numpy()
 
+    def score_samples_iterator(self, dataset_iterator):
+        """
+        Compute scores (mse) between images and predictions.
+        :param dataset_iterator: iterator of MultiChannelIterator type
+        Return: scores in the batch format
+        """
+        scores = []
+        for i in range(len(dataset_iterator)):  # itere a l'infini???
+            _, (ims, labs) = dataset_iterator[i]
+            if (i + 1) % 50 == 0:
+                print(f"making predictions on batch {i + 1}...")
+            predictions = self.predict(ims)
+            y_scores = np.sum((predictions - self.CENTER) ** 2, axis=(1, 2, 3))
+            scores.append(y_scores)
+
+        return np.array(scores)
+
     def is_anormal(self, data, im_threshold=0):
         predictions = self.predict(data)
         return binarize_set(np.sum((predictions - self.CENTER) ** 2, axis=-1) > im_threshold)
@@ -82,6 +99,56 @@ class DeepSVDD(Model):
 
     def compute_ROC(self, y_true, y_score):
         return roc_curve(y_true, y_score)
+
+    def compute_ROC_iterator(self, dataset_iterator, interest_digit=7):
+        """
+        :param dataset_iterator: expected to be in the format given by
+        MultiChannelIterator with (bx, by) == dataset_iterator[0] and then
+        (images_x, labels_x) == bx
+        """
+        labels = []
+        for i in range(len(dataset_iterator)):
+            _, (ims, y_true) = dataset_iterator[i]
+            labels.append(y_true.squeeze(-1))
+        y_trues = np.array(labels).flatten()
+
+        y_scores = self.score_samples_iterator(dataset_iterator).flatten()
+
+        if not is_binary(y_trues):
+            y_true_bin = binarize_set(y_trues, interest=interest_digit)
+        else:
+            y_true_bin = y_trues
+
+        fpr, tpr, thresholds = roc_curve(y_true_bin, y_scores)
+
+        return fpr, tpr, thresholds
+
+    def plot_scores_distrib(self, dataset_iterator, interest_class=7):
+        """
+        Plot the distribution of anomaly scores computed on dataset_iterator, for
+        the normal class and for the anormal class
+        :param dataset_iterator:
+        :param interest_class:
+        :return:
+        """
+        labs = []
+        for i in range(len(dataset_iterator)):
+            _, (ims, lab) = dataset_iterator[i]
+            labs.append(lab)
+        labs = np.array(labs).squeeze(-1).flatten()
+
+        sc = self.score_samples_iterator(dataset_iterator).flatten()
+
+        scores_nominal = sc[labs == interest_class]
+        scores_anormal = sc[labs != interest_class]
+
+        fig, axes = plt.subplots(1, 2, figsize=(15, 8))
+        axes[0].hist(scores_nominal)
+        axes[0].set_title("anomaly scores for nominal class")
+        axes[1].hist(scores_anormal)
+        axes[1].set_title("anomaly scores for anormal class")
+
+        return fig, axes
 
     @staticmethod
     def evaluate_on_all(archi, x_train, x_test, y_test, n_classes=10, epochs=30, **params):
