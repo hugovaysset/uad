@@ -43,7 +43,7 @@ def conv2d_block(input_tensor, n_filters, kernel_size=(3, 1), batchnorm=True,
 
 
 def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=(3, 3), batchnorm=False, dropout=0,
-                 spatial_dropout=0.2):
+                 spatial_dropout=0.2, padding=None):
     """
     U-Net architecture is composed of a contraction paths ((1 convolution layers, 1 activation layer)**2, 1 max pooling)**n
      and one expansive path: (1 convolution transpose, (1 convolution layers, 1 activation layer)**2)**n terminated by
@@ -55,14 +55,20 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
     :param batchnorm:
     :param dropout:
     :param spatial_dropout:
+    :param padding: if padding is needed in the beginning, pass into a numpy array the padding to apply see Keras doc
     :return:
     """
 
     latent_depth = n_filters * int(2 ** n_contractions)
     latent_dims = (
-    int(input_dims[0] / (2 ** n_contractions)), int(input_dims[1] / (2 ** n_contractions)), latent_depth)
+        int(input_dims[0] / (2 ** n_contractions)), int(input_dims[1] / (2 ** n_contractions)), latent_depth)
 
     encoder_inputs = layers.Input(shape=input_dims, name="encoder_inputs")
+
+    if padding is not None:
+        paddings = tf.constant(padding)  # shape d x 2 where d is the rank of the tensor and
+        # 2 represents "before" and "after"
+        x = tf.pad(encoder_inputs, paddings, name="pad")
 
     # contracting path
     for i in range(n_contractions):
@@ -109,9 +115,13 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
         x = layers.SpatialDropout2D(rate=dropout)(x)
     x = layers.Conv2D(input_dims[-1], kernel_size=k_size, padding="same")(x)
 
+    if padding is not None:
+        x = tf.image.resize_with_crop_or_pad(x, input_dims[0], input_dims[1])
+
     decoder = Model(inputs=latent_inputs, outputs=x, name="decoder")
 
     return encoder, decoder
+
 
 def get_ruff_svdd(input_dims=(32, 32, 3), n_filters=(32, 64, 128), dense_sizes=(64, 2), k_size=(5, 5), LAMBDA=1e-6,
                   spatial_dropout=0.2, dropout=0, batchnorm=False):
@@ -156,8 +166,9 @@ def get_ruff_svdd(input_dims=(32, 32, 3), n_filters=(32, 64, 128), dense_sizes=(
 
     return tf.keras.Model(inputs, x)
 
+
 def get_ruff_vae(input_dims=(32, 32, 3), n_filters=(32, 64, 128), k_size=(5, 5), LAMBDA=1e-6,
-                  spatial_dropout=0.2, dropout=0, batchnorm=False):
+                 spatial_dropout=0.2, dropout=0, batchnorm=False):
     """
     LeNet-type architecture descirbed by Ruff et al. in their publication
     :param input_dims:
@@ -221,4 +232,3 @@ def get_ruff_vae(input_dims=(32, 32, 3), n_filters=(32, 64, 128), k_size=(5, 5),
     decoder = Model(inputs, [z_mean, z_log_var, z], name="encoder")
 
     return encoder, decoder
-
