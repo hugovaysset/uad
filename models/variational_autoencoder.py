@@ -297,10 +297,15 @@ class OC_VAE(Model):
             z_mean, z_log_var, z = self.encoder(data)
             reconstruction = self.decoder(z)
 
-            reconstruction_loss = tf.reduce_mean(
-                tf.keras.losses.binary_crossentropy(data, reconstruction)  # change to MSE for other images
-            )
-            reconstruction_loss *= 28 * 28
+            if self.reconstruction_loss == "xent":
+                reconstruction_loss = tf.reduce_mean(
+                    tf.keras.losses.binary_crossentropy(data, reconstruction)
+                )
+                reconstruction_loss *= self.input_dims[0] * self.input_dims[1]
+            elif self.reconstruction_loss == "mse":
+                reconstruction_loss = tf.keras.losses.MSE(data, reconstruction)
+            else:
+                raise NotImplementedError("Reconstruction loss should be either xent or mse")
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
             kl_loss = tf.reduce_mean(kl_loss)
             kl_loss *= -0.5
@@ -334,7 +339,7 @@ class OC_VAE(Model):
                 reconstruction_loss = tf.reduce_mean(
                     tf.keras.losses.binary_crossentropy(data, reconstruction)
                 )
-                reconstruction_loss *= self.input_dimsms[0] * self.input_dims[1]
+                reconstruction_loss *= self.input_dims[0] * self.input_dims[1]
             elif self.reconstruction_loss == "mse":
                 reconstruction_loss = tf.keras.losses.MSE(data, reconstruction)
             else:
@@ -437,7 +442,7 @@ class OC_VAE(Model):
     def compute_AUC(self, fprs, tprs):
         return auc(fprs, tprs)
 
-    def plot_scores_distrib(self, dataset_iterator, decision_function=True, batch=True, interest_class=7):
+    def plot_scores_distrib(self, dataset_iterator, decision_function="distance", batch=True, interest_class=7):
         """
         Plot the distribution of anomaly scores computed on dataset_iterator, for
         the normal class and for the anormal class

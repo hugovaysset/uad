@@ -43,7 +43,7 @@ def conv2d_block(input_tensor, n_filters, kernel_size=(3, 1), batchnorm=True,
 
 
 def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=(3, 3), batchnorm=False, dropout=0,
-                 spatial_dropout=0.2, padding=None):
+                 spatial_dropout=0.2, padding=None, activation_function="relu", latent_depth=None):
     """
     U-Net architecture is composed of a contraction paths ((1 convolution layers, 1 activation layer)**2, 1 max pooling)**n
      and one expansive path: (1 convolution transpose, (1 convolution layers, 1 activation layer)**2)**n terminated by
@@ -59,25 +59,31 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
     :return:
     """
 
-    latent_depth = n_filters * int(2 ** n_contractions)
-    latent_dims = (
-        int(input_dims[0] / (2 ** n_contractions)), int(input_dims[1] / (2 ** n_contractions)), latent_depth)
+    if latent_depth is None:
+        latent_depth = n_filters * int(2 ** n_contractions)
+    if padding is None:
+        latent_dims = (int(input_dims[0] / (2 ** n_contractions)),
+                       int(input_dims[1] / (2 ** n_contractions)), latent_depth)
+    else:
+        latent_dims = (int((input_dims[0] + padding[1][0] + padding[1][1]) / (2 ** n_contractions)),
+                       int((input_dims[1] + padding[2][0] + padding[2][1]) / (2 ** n_contractions)), latent_depth)
 
     encoder_inputs = layers.Input(shape=input_dims, name="encoder_inputs")
 
     if padding is not None:
+        print(padding)
         paddings = tf.constant(padding)  # shape d x 2 where d is the rank of the tensor and
         # 2 represents "before" and "after"
         x = tf.pad(encoder_inputs, paddings, name="pad")
 
     # contracting path
     for i in range(n_contractions):
-        if i == 0:
+        if i == 0 and padding is None:
             x = conv2d_block(encoder_inputs, n_filters * 2 ** i, kernel_size=k_size,
-                             batchnorm=batchnorm, activation="relu")
+                             batchnorm=batchnorm, activation=activation_function)
         else:
             x = conv2d_block(x, n_filters * 2 ** i, kernel_size=k_size, batchnorm=batchnorm,
-                             activation="relu")
+                             activation=activation_function)
         x = layers.MaxPooling2D((2, 2))(x)
         if dropout != 0:
             x = layers.Dropout(dropout)(x)
@@ -101,19 +107,20 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
             x = layers.Conv2DTranspose(n_filters * 2 ** i, k_size, strides=(2, 2),
                                        padding='same')(x)
         x = conv2d_block(x, n_filters * 2 ** i, kernel_size=k_size, batchnorm=batchnorm,
-                         activation="relu")
+                         activation=activation_function)
         if dropout != 0:
             x = layers.Dropout(dropout)(x)
         if spatial_dropout != 0:
             x = layers.SpatialDropout2D(rate=dropout)(x)
 
-    x = layers.Conv2DTranspose(n_filters * 2, kernel_size=k_size, strides=(2, 2),
+    x = layers.Conv2DTranspose(n_filters, kernel_size=k_size, strides=(2, 2),
                                padding='same')(x)
     if dropout != 0:
         x = layers.Dropout(dropout)(x)
     if spatial_dropout != 0:
         x = layers.SpatialDropout2D(rate=dropout)(x)
-    x = layers.Conv2D(input_dims[-1], kernel_size=k_size, padding="same")(x)
+
+    x = conv2d_block(x, input_dims[-1], kernel_size=k_size, batchnorm=batchnorm, activation=activation_func)
 
     if padding is not None:
         x = tf.image.resize_with_crop_or_pad(x, input_dims[0], input_dims[1])
@@ -121,7 +128,6 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
     decoder = Model(inputs=latent_inputs, outputs=x, name="decoder")
 
     return encoder, decoder
-
 
 def get_ruff_svdd(input_dims=(32, 32, 3), n_filters=(32, 64, 128), dense_sizes=(64, 2), k_size=(5, 5), LAMBDA=1e-6,
                   spatial_dropout=0.2, dropout=0, batchnorm=False):
