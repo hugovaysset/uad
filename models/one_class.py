@@ -42,9 +42,10 @@ class DeepSVDD(Model):
             data = data[0]
         with tf.GradientTape() as tape:
             predictions = self(data)
-            distances_to_center = tf.norm(predictions - self.CENTER, axis=-1)
+            # distances_to_center = tf.norm(predictions - self.CENTER, axis=-1)
+            distances_to_center = tf.math.sqrt(tf.reduce_sum((predictions - self.CENTER) ** 2))
             self.RADIUS = tf.reduce_max(distances_to_center)
-            centripetal_loss = tf.reduce_mean(distances_to_center ** 2)
+            centripetal_loss = tf.reduce_mean(distances_to_center)
             weight_decay = tf.math.reduce_sum(self.losses)
             total_loss = centripetal_loss + self.LAMBDA * weight_decay
         grads = tape.gradient(total_loss, self.trainable_weights)

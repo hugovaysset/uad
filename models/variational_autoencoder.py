@@ -301,15 +301,18 @@ class OC_VAE(Model):
                 reconstruction_loss = tf.reduce_mean(
                     tf.keras.losses.binary_crossentropy(data, reconstruction)
                 )
-                reconstruction_loss *= self.input_dims[0] * self.input_dims[1]
+                reconstruction_loss *= self.input_dimsms[0] * self.input_dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.keras.losses.MSE(data, reconstruction)
+                reconstruction_loss = tf.math.sqrt(tf.reduce_sum((reconstruction - data) ** 2))
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
+
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
             kl_loss = tf.reduce_mean(kl_loss)
             kl_loss *= -0.5
+
             centripetal_loss = tf.math.sqrt(tf.reduce_sum((z_mean - self.CENTER) ** 2))
+
             total_loss = (1 - (self.LAMBDAS[0] + self.LAMBDAS[1])) * reconstruction_loss + self.LAMBDAS[0] * kl_loss + \
                          self.LAMBDAS[1] * centripetal_loss
 
@@ -341,7 +344,7 @@ class OC_VAE(Model):
                 )
                 reconstruction_loss *= self.input_dims[0] * self.input_dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.keras.losses.MSE(data, reconstruction)
+                reconstruction_loss = tf.math.sqrt(tf.reduce_sum((reconstruction - data) ** 2))
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
 
@@ -349,7 +352,7 @@ class OC_VAE(Model):
             kl_loss = tf.reduce_mean(kl_loss)
             kl_loss *= -0.5
 
-            centripetal_loss = tf.math.sqrt(tf.reduce_sum((z_mean - self.CENTER) ** 2))
+            centripetal_loss = tf.math.sqrt(tf.reduce_sum(z_mean - self.CENTER) ** 2)
 
             total_loss = (1 - (self.LAMBDAS[0] + self.LAMBDAS[1])) * reconstruction_loss + self.LAMBDAS[0] * kl_loss + \
                          self.LAMBDAS[1] * centripetal_loss

@@ -129,6 +129,7 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
 
     return encoder, decoder
 
+
 def get_ruff_svdd(input_dims=(32, 32, 3), n_filters=(32, 64, 128), dense_sizes=(64, 2), k_size=(5, 5), LAMBDA=1e-6,
                   spatial_dropout=0.2, dropout=0, batchnorm=False):
     """
