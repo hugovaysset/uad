@@ -120,7 +120,7 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
     if spatial_dropout != 0:
         x = layers.SpatialDropout2D(rate=dropout)(x)
 
-    x = conv2d_block(x, input_dims[-1], kernel_size=k_size, batchnorm=batchnorm, activation=activation_func)
+    x = conv2d_block(x, input_dims[-1], kernel_size=k_size, batchnorm=batchnorm, activation=activation_function)
 
     if padding is not None:
         x = tf.image.resize_with_crop_or_pad(x, input_dims[0], input_dims[1])
