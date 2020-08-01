@@ -352,7 +352,7 @@ class OC_VAE(Model):
             kl_loss = tf.reduce_mean(kl_loss)
             kl_loss *= -0.5
 
-            centripetal_loss = tf.math.sqrt(tf.reduce_sum(z_mean - self.CENTER) ** 2)
+            centripetal_loss = tf.math.sqrt(tf.reduce_sum((z_mean - self.CENTER) ** 2))
 
             total_loss = (1 - (self.LAMBDAS[0] + self.LAMBDAS[1])) * reconstruction_loss + self.LAMBDAS[0] * kl_loss + \
                          self.LAMBDAS[1] * centripetal_loss

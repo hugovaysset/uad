@@ -18,15 +18,15 @@ def anomaly_score(model, data, decision_func="distance", batch=True):
         predictions, z_log_var, _ = model.encoder.predict(data)
         if batch:
             if len(predictions.shape) == 4:  # batch of vectors along the first axis
-                return tf.sqrt(tf.reduce_sum(model.CENTER - predictions, axis=(-3, -2, -1)) ** 2)
+                return tf.math.sqrt(tf.reduce_sum((model.CENTER - predictions) ** 2, axis=(-3, -2, -1)))
             elif len(predictions.shape) == 3:  # batch of matrices along the first axis
-                return tf.sqrt(tf.reduce_sum(model.CENTER - predictions, axis=(-2, -1)) ** 2)
+                return tf.math.sqrt(tf.reduce_sum((model.CENTER - predictions) ** 2, axis=(-2, -1)))
             elif len(predictions.shape) == 2:  # batch of vectors along the first axis
-                return tf.sqrt(tf.reduce_sum(model.CENTER - predictions, axis=-1) ** 2)
+                return tf.math.sqrt(tf.reduce_sum((model.CENTER - predictions) ** 2, axis=-1))
         else:
-            return tf.sqrt(tf.reduce_sum(model.CENTER - predictions) ** 2)
+            return tf.math.sqrt(tf.reduce_sum((model.CENTER - predictions) ** 2))
 
     if decision_func == "reconstruction":
         predictions = model.predict(data)
-        return tf.reduce_mean(tf.reduce_sum(data - predictions, axis=(-3, -2, -1)) ** 2)
+        return tf.math.sqrt(tf.reduce_sum((data - predictions) ** 2, axis=(-3, -2, -1)))
 

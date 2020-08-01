@@ -11,9 +11,9 @@ def anomaly_score_from_predictions(model, predictions):
     :return:
     """
     if len(predictions.shape) > 1:  # batch of vectors along the first axis
-        return tf.norm(model.CENTER - predictions, axis=-1) ** 2
+        return tf.math.sqrt(tf.reduce_sum((model.CENTER - predictions) ** 2, axis=-1))
     else:  # single vector, tf.norm parameter axis=None
-        return tf.norm(model.CENTER - predictions) ** 2
+        return tf.math.sqrt(tf.reduce_sum((model.CENTER - predictions) ** 2))
 
 
 def anomaly_score_from_images(model, images):

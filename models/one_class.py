@@ -21,9 +21,7 @@ class DeepSVDD(Model):
         If inputs is None and outputs is None: builds a DeepSVDD network with a LeNet architecture as used in Ruff 2018
         Else give input and outputs to build a model via subclassing
         :param model: either an iterable of layers or a keras.Model
-        :param n_filters: # filters for each convolution. Tuple length must match the number of blocks
-        :param dims: input shape
-        :param dense_shape: number of units of the final dense layer
+        :param final_dense_shape: # node of the final dense layer
         :param LAMBDA: factor in front of the weight decay loss
         :param kwargs:
         """
