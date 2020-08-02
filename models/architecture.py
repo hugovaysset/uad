@@ -208,7 +208,7 @@ def get_ruff_vae(input_dims=(32, 32, 3), n_filters=(32, 64, 128), k_size=(5, 5),
         x = layers.LeakyReLU(alpha=0.1)(x)
         x = layers.MaxPooling2D((2, 2))(x)
 
-    latent_depth = n_filters * int(2 ** n_contractions)
+    latent_depth = n_filters[0] * int(2 ** n_contractions)
     latent_dims = (int(input_dims[0] / (2 ** n_contractions)), int(input_dims[1] / (2 ** n_contractions)), latent_depth)
 
     z_mean = layers.Conv2D(latent_depth, 1, strides=1, name="z_mean")(x)
@@ -221,21 +221,23 @@ def get_ruff_vae(input_dims=(32, 32, 3), n_filters=(32, 64, 128), k_size=(5, 5),
     latent_inputs = tf.keras.Input(shape=latent_dims)
 
     for i in range(n_contractions - 1, -1, -1):
-        if i == 0:
-            x = layers.Conv2D(filters=n_filters[i], kernel_size=k_size, strides=(1, 1), kernel_regularizer=l2(LAMBDA),
-                              padding="same", name=f"conv_1")(latent_inputs)
+        if i == n_contractions - 1:
+            x = layers.Conv2DTranspose(n_filters[i], kernel_size=k_size, strides=(2, 2))(latent_inputs)
         else:
-            x = layers.Conv2D(filters=n_filters[i], kernel_size=k_size, strides=(1, 1), kernel_regularizer=l2(LAMBDA),
-                              padding="same")(x)
+            x = layers.Conv2DTranspose(n_filters[i], kernel_size=k_size, strides=(2, 2))(x)
+        x = layers.Conv2D(filters=n_filters[i], kernel_size=k_size, strides=(1, 1), kernel_regularizer=l2(LAMBDA),
+                          padding="same")(x)
+        x = layers.LeakyReLU(alpha=0.1)(x)
         if spatial_dropout != 0:
             x = layers.SpatialDropout2D(spatial_dropout)(x)
         if dropout != 0:
             x = layers.Dropout(dropout)(x)
         if batchnorm:
             x = layers.BatchNormalization()(x)
-        x = layers.LeakyReLU(alpha=0.1)(x)
-        x = layers.Conv2DTranspose(n_filters[i], kernel_size=k_size)(x)
 
-    decoder = Model(inputs, [z_mean, z_log_var, z], name="encoder")
+    x = layers.Conv2D(filters=input_dims[-1], kernel_size=k_size, strides=(1, 1), kernel_regularizer=l2(LAMBDA),
+                      padding="same")(x)
+
+    decoder = Model(latent_inputs, x, name="encoder")
 
     return encoder, decoder
