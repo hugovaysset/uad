@@ -22,7 +22,7 @@ def conv2d_block(input_tensor, n_filters, kernel_size=(3, 1), batchnorm=True,
         x = layers.BatchNormalization()(x)
     if activation == "relu" or activation == "sigmoid" or activation == "linear":
         x = layers.Activation(activation)(x)
-    elif activation == "leaky_relu":
+    elif activation == "leaky_relu" or activation == "l_relu" or activation == "lrelu":
         x = tf.keras.layers.LeakyReLU(alpha=0.3)(x)
     else:
         raise NotImplementedError("activation function should be given by a valid string of leaky_relu")

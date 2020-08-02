@@ -219,7 +219,7 @@ class VAE(Model):
                 )
                 reconstruction_loss *= self.dims[0] * self.dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.keras.losses.MSE(data, reconstruction)
+                reconstruction_loss = tf.math.sqrt(tf.reduce_sum((reconstruction - data) ** 2))
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
@@ -250,7 +250,7 @@ class VAE(Model):
                 )
                 reconstruction_loss *= self.dims[0] * self.dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.keras.losses.MSE(data, reconstruction)
+                reconstruction_loss = tf.math.sqrt(tf.reduce_sum((reconstruction - data) ** 2))
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
@@ -267,6 +267,77 @@ class VAE(Model):
     def call(self, inputs):
         z_mean, z_log_var, z = self.encoder(inputs)
         return self.decoder(z)
+
+    def score_samples_iterator(self, dataset_iterator):
+        """
+        Returns the anomaly scores for data (name of the method inspired from the sklearn
+        interface) when data is given in an iterator
+        :param dataset_iterator: image or batch of images
+        :param decision_function: can be either "distance" to predict anomalies based on their distance to the model's center
+        (in an SVDD manner) or "reconstruction" to predict anomalies based on the reconstruction error between the input
+        image and the reconstruction (using MSE, in a VAE manner).
+        Return: scores in the batch format
+        """
+        scores = []
+        for i in range(len(dataset_iterator)):
+            _, (ims, labs) = dataset_iterator[i]
+            if (i + 1) % 50 == 0:
+                print(f"making predictions on batch {i + 1}...")
+            predictions = self.predict(ims)
+            y_scores = tf.math.sqrt(tf.reduce_sum((predictions - ims) ** 2, axis=(1, 2, 3))) # implementer differentes fonctions de decision ensuite
+            scores.append(y_scores)
+        return np.array(scores)
+
+    def compute_ROC_iterator(self, dataset_iterator, interest_digit=0):
+        """
+        :param dataset_iterator:
+        :param decision_function:
+        :param batch:
+        :param interest_digit:
+        :return:
+        """
+        labels = []
+        for i in range(len(dataset_iterator)):
+            _, (ims, y_true) = dataset_iterator[i]
+            labels.append(y_true.squeeze(-1))
+
+        y_trues = np.array(labels).flatten()
+        y_scores = self.score_samples_iterator(dataset_iterator).flatten()
+
+        if not is_binary(y_trues):
+            y_true_bin = binarize_set(y_trues, interest=interest_digit)
+        else:
+            y_true_bin = y_trues
+
+        fpr, tpr, thresholds = roc_curve(y_true_bin, y_scores)
+
+        return fpr, tpr, thresholds
+
+    def plot_scores_distrib(self, dataset_iterator, interest_class=0):
+        """
+        Plot the distribution of anomaly scores computed on dataset_iterator, for
+        the normal class and for the anormal class
+        :param dataset_iterator:
+        :param interest_class:
+        :return:
+        """
+        labs = []
+        for i in range(len(dataset_iterator)):
+            _, (ims, lab) = dataset_iterator[i]
+            labs.append(lab)
+        labs = np.array(labs).squeeze(-1).flatten()
+        sc = self.score_samples_iterator(dataset_iterator).flatten()
+
+        scores_nominal = sc[labs == interest_class]
+        scores_anormal = sc[labs != interest_class]
+
+        fig, axes = plt.subplots(1, 2, figsize=(15, 8))
+        axes[0].hist(scores_nominal)
+        axes[0].set_title("anomaly scores for nominal class")
+        axes[1].hist(scores_anormal)
+        axes[1].set_title("anomaly scores for anormal class")
+
+        return fig, axes
 
 
 class OC_VAE(Model):
