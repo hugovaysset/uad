@@ -1,13 +1,10 @@
-import numpy as np
 import tensorflow as tf
-from sklearn.metrics import roc_curve, auc
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
-from uad.decision.oc_vae import anomaly_score
-from uad.diagnostic.metrics import binarize_set
-from uad.models.variational_autoencoder import Sampling
 from uad.models.self_attention import SelfAttention
+from uad.models.variational_autoencoder import Sampling
+
 
 def conv2d_block(input_tensor, n_filters, kernel_size=(3, 1), batchnorm=True,
                  activation="relu"):
@@ -43,7 +40,8 @@ def conv2d_block(input_tensor, n_filters, kernel_size=(3, 1), batchnorm=True,
 
 
 def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=(3, 3), batchnorm=False, dropout=0,
-                 spatial_dropout=0.2, padding=None, activation_function="relu", latent_depth=None, self_attention=False):
+                 spatial_dropout=0.2, padding=None, activation_function="relu", latent_depth=None, self_attention=False,
+                 final_activation=""):
     """
     U-Net architecture is composed of a contraction paths ((1 convolution layers, 1 activation layer)**2, 1 max pooling)**n
      and one expansive path: (1 convolution transpose, (1 convolution layers, 1 activation layer)**2)**n terminated by
@@ -56,6 +54,8 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
     :param dropout:
     :param spatial_dropout:
     :param padding: if padding is needed in the beginning, pass into a numpy array the padding to apply see Keras doc
+    :param final_activation: if not "", apply an activation function as the final layer. Specify in a string the name
+    of the final activation function
     :return:
     """
 
@@ -128,6 +128,9 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
 
     if padding is not None:
         x = tf.image.resize_with_crop_or_pad(x, input_dims[0], input_dims[1])
+
+    if final_activation != "":
+        x = layers.Activation(final_activation)(x)
 
     decoder = Model(inputs=latent_inputs, outputs=x, name="decoder")
 

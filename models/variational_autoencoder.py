@@ -219,7 +219,8 @@ class VAE(Model):
                 )
                 reconstruction_loss *= self.dims[0] * self.dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.reduce_mean(tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)), axis=0)
+                residual_maps = (reconstruction - data) ** 2
+                reconstruction_loss = 1 / len(data) * tf.reduce_sum(residual_maps, axis=(1, 2, 3))
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
