@@ -91,10 +91,8 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
             x = layers.SpatialDropout2D(rate=dropout)(x)
 
     if self_attention:
-        s = SelfAttention(latent_depth, (latent_dims[0], latent_dims[1]), positional_encoding=True)(x)[0]
+        s = SelfAttention(latent_depth // 2, (latent_dims[0], latent_dims[1]), positional_encoding=True)(x)[0]
         x = layers.Concatenate(axis=-1)([s, x])
-        latent_depth *= 2
-        latent_dims[-1] *= 2
 
     z_mean = layers.Conv2D(latent_depth, 1, strides=1, name="z_mean")(x)
     z_log_var = layers.Conv2D(latent_depth, 1, strides=1, name="z_log_var")(x)
