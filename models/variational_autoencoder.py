@@ -310,7 +310,7 @@ class VAE(Model):
         else:
             y_true_bin = y_trues
 
-        fpr, tpr, thresholds = roc_curve(y_true_bin, y_scores)
+        fpr, tpr, thresholds = roc_curve(y_true_bin, y_scores, pos_label=1)
 
         return fpr, tpr, thresholds
 
