@@ -7,7 +7,7 @@ from tensorflow.keras.regularizers import l2
 from uad.decision.oc_vae import anomaly_score
 from uad.diagnostic.metrics import binarize_set
 from uad.models.variational_autoencoder import Sampling
-
+from uad.models.self_attention import SelfAttention
 
 def conv2d_block(input_tensor, n_filters, kernel_size=(3, 1), batchnorm=True,
                  activation="relu"):
@@ -43,7 +43,7 @@ def conv2d_block(input_tensor, n_filters, kernel_size=(3, 1), batchnorm=True,
 
 
 def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=(3, 3), batchnorm=False, dropout=0,
-                 spatial_dropout=0.2, padding=None, activation_function="relu", latent_depth=None):
+                 spatial_dropout=0.2, padding=None, activation_function="relu", latent_depth=None, self_attention=False):
     """
     U-Net architecture is composed of a contraction paths ((1 convolution layers, 1 activation layer)**2, 1 max pooling)**n
      and one expansive path: (1 convolution transpose, (1 convolution layers, 1 activation layer)**2)**n terminated by
@@ -89,6 +89,12 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
             x = layers.Dropout(dropout)(x)
         if spatial_dropout != 0:
             x = layers.SpatialDropout2D(rate=dropout)(x)
+
+    if self_attention:
+        s = SelfAttention(latent_depth, (latent_dims[0], latent_dims[1]), positional_encoding=True)(x)[0]
+        x = layers.Concatenate(axis=-1)([s, x])
+        latent_depth *= 2
+        latent_dims[-1] *= 2
 
     z_mean = layers.Conv2D(latent_depth, 1, strides=1, name="z_mean")(x)
     z_log_var = layers.Conv2D(latent_depth, 1, strides=1, name="z_log_var")(x)
