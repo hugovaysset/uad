@@ -219,7 +219,7 @@ class VAE(Model):
                 )
                 reconstruction_loss *= self.dims[0] * self.dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.math.sqrt(tf.reduce_sum((reconstruction - data) ** 2))
+                reconstruction_loss = tf.reduce_mean(tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)), axis=0)
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
@@ -250,7 +250,7 @@ class VAE(Model):
                 )
                 reconstruction_loss *= self.dims[0] * self.dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.math.sqrt(tf.reduce_sum((reconstruction - data) ** 2))
+                reconstruction_loss = tf.reduce_mean(tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)), axis=0)
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
@@ -374,7 +374,7 @@ class OC_VAE(Model):
                 )
                 reconstruction_loss *= self.input_dimsms[0] * self.input_dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.math.sqrt(tf.reduce_sum((reconstruction - data) ** 2))
+                reconstruction_loss = tf.reduce_mean(tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)), axis=0)
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
 
@@ -415,7 +415,7 @@ class OC_VAE(Model):
                 )
                 reconstruction_loss *= self.input_dims[0] * self.input_dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.math.sqrt(tf.reduce_sum((reconstruction - data) ** 2))
+                reconstruction_loss = tf.reduce_mean(tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)), axis=0)
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
 
