@@ -250,7 +250,8 @@ class VAE(Model):
                 )
                 reconstruction_loss *= self.dims[0] * self.dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.reduce_mean(tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)), axis=0)
+                reconstruction_loss = tf.reduce_mean(tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)),
+                                                     axis=0)
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
@@ -284,7 +285,8 @@ class VAE(Model):
             if (i + 1) % 50 == 0:
                 print(f"making predictions on batch {i + 1}...")
             predictions = self.predict(ims)
-            y_scores = tf.math.sqrt(tf.reduce_sum((predictions - ims) ** 2, axis=(1, 2, 3))) # implementer differentes fonctions de decision ensuite
+            y_scores = tf.math.sqrt(tf.reduce_sum((predictions - ims) ** 2, axis=(
+            1, 2, 3)))  # implementer differentes fonctions de decision ensuite
             scores.append(y_scores)
         return np.array(scores)
 
@@ -362,7 +364,9 @@ class OC_VAE(Model):
 
     def train_step(self, data):
         if isinstance(data, tuple):
-            data = data[0]
+            data, denoised_data = data
+        else:
+            denoised_data = None
 
         with tf.GradientTape() as tape:
             z_mean, z_log_var, z = self.encoder(data)
@@ -372,9 +376,14 @@ class OC_VAE(Model):
                 reconstruction_loss = tf.reduce_mean(
                     tf.keras.losses.binary_crossentropy(data, reconstruction)
                 )
-                reconstruction_loss *= self.input_dimsms[0] * self.input_dims[1]
+                reconstruction_loss *= self.input_dims[0] * self.input_dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.reduce_mean(tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)), axis=0)
+                if denoised_data is not None:
+                    reconstruction_loss = tf.reduce_mean(
+                        tf.reduce_sum((reconstruction - denoised_data) ** 2, axis=(1, 2, 3)), axis=0)
+                else:
+                    reconstruction_loss = tf.reduce_mean(
+                        tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)), axis=0)
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
 
@@ -404,7 +413,9 @@ class OC_VAE(Model):
 
     def test_step(self, data):
         if isinstance(data, tuple):
-            data = data[0]
+            data, denoised_data = data
+        else:
+            denoised_data = None
 
         with tf.GradientTape() as tape:
             z_mean, z_log_var, z = self.encoder(data)
@@ -416,7 +427,12 @@ class OC_VAE(Model):
                 )
                 reconstruction_loss *= self.input_dims[0] * self.input_dims[1]
             elif self.reconstruction_loss == "mse":
-                reconstruction_loss = tf.reduce_mean(tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)), axis=0)
+                if denoised_data is not None:
+                    reconstruction_loss = tf.reduce_mean(
+                        tf.reduce_sum((reconstruction - denoised_data) ** 2, axis=(1, 2, 3)), axis=0)
+                else:
+                    reconstruction_loss = tf.reduce_mean(
+                        tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)), axis=0)
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
 

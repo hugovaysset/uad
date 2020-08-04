@@ -65,7 +65,7 @@ def plot_tSNE(dataset, colors, axis=-1, plot_center=None, plt_ax=None):
     :param plt_ax: matplotlib axis object on which to plot the result
     :return: matplotlib figure, axis, scatter and texts
     """
-    if plot_center.any():
+    if plot_center is not None and plot_center.any():
         dataset = np.concatenate((dataset, plot_center), axis=0)
         colors = np.concatenate((colors, [-1]), axis=0)
 
