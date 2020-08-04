@@ -219,8 +219,7 @@ class VAE(Model):
                 )
                 reconstruction_loss *= self.dims[0] * self.dims[1]
             elif self.reconstruction_loss == "mse":
-                residual_maps = (reconstruction - data) ** 2
-                reconstruction_loss = 1 / len(data) * tf.reduce_sum(residual_maps, axis=(1, 2, 3))
+                reconstruction_loss = tf.reduce_mean(tf.reduce_sum((reconstruction - data) ** 2, axis=(1, 2, 3)))
             else:
                 raise NotImplementedError("Reconstruction loss should be either xent or mse")
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
@@ -383,6 +382,7 @@ class OC_VAE(Model):
             kl_loss = tf.reduce_mean(kl_loss)
             kl_loss *= -0.5
 
+            # return a batch loss or a scalar (taking the mean loss) ?
             centripetal_loss = tf.math.sqrt(tf.reduce_sum((z_mean - self.CENTER) ** 2))
 
             total_loss = (1 - (self.LAMBDAS[0] + self.LAMBDAS[1])) * reconstruction_loss + self.LAMBDAS[0] * kl_loss + \
