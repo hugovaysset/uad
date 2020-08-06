@@ -19,7 +19,7 @@ def conv2d_block(input_tensor, n_filters, kernel_size=(3, 3), batchnorm=True,
                           kernel_initializer='he_normal', padding='same')(input_tensor)
     else:
         x = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
-                          kernel_initializer='he_normal', padding='same', kernel_regularizer=kernel_regul,
+                          kernel_initializer='he_normal', padding='same', kernel_regularizer=l2(kernel_regul),
                           use_bias=False)(input_tensor)
     if batchnorm:
         x = layers.BatchNormalization()(x)
@@ -36,7 +36,7 @@ def conv2d_block(input_tensor, n_filters, kernel_size=(3, 3), batchnorm=True,
                           kernel_initializer='he_normal', padding='same', kernel_regularizer=kernel_regul)(x)
     else:
         x = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
-                          kernel_initializer='he_normal', padding='same', kernel_regularizer=kernel_regul,
+                          kernel_initializer='he_normal', padding='same', kernel_regularizer=l2(kernel_regul),
                           use_bias=False)(x)
     if batchnorm:
         x = layers.BatchNormalization()(x)
