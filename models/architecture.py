@@ -179,7 +179,7 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
     return encoder, decoder
 
 
-def get_unet_svdd(n_filters=64, n_contractions=3, dense_sizes=tuple(128), input_dims=(28, 28, 1), batchnorm=False,
+def get_unet_svdd(n_filters=64, n_contractions=3, dense_sizes=128, input_dims=(28, 28, 1), batchnorm=False,
                   dropout=0, spatial_dropout=0.2, padding=None, activation_function="relu", latent_depth=None,
                   self_attention=False, LAMBDA=1e-6):
     if latent_depth is None:
@@ -222,7 +222,10 @@ def get_unet_svdd(n_filters=64, n_contractions=3, dense_sizes=tuple(128), input_
     x = layers.Flatten()(x)
 
     # denses
-    n_denses = len(dense_sizes)
+    if type(dense_sizes) == int:
+        n_denses = 0
+    else:
+        n_denses = len(dense_sizes)
     for i in range(n_denses):
         x = layers.Dense(dense_sizes[i], kernel_regularizer=l2(LAMBDA), use_bias=False)(x)
 
