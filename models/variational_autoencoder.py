@@ -460,7 +460,7 @@ class OC_VAE(Model):
         z_mean, z_log_var, z = self.encoder.predict(data)
         return tf.math.sqrt(tf.reduce_sum(z_mean - self.CENTER) ** 2)
 
-    def score_samples(self, data, decision_function="distance", batch=True):
+    def score_samples(self, data, decision_function="reconstruction", batch=True):
         """
         Returns the anomaly scores for data (name of the method inspired from the sklearn
         interface)
@@ -473,7 +473,7 @@ class OC_VAE(Model):
         """
         return - anomaly_score(self, data, decision_func=decision_function, batch=batch).numpy()
 
-    def score_samples_iterator(self, dataset_iterator, decision_function="distance", batch=True):
+    def score_samples_iterator(self, dataset_iterator, decision_function="reconstruction", batch=True):
         """
         Returns the anomaly scores for data (name of the method inspired from the sklearn
         interface) when data is given in an iterator

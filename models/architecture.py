@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
@@ -6,7 +7,7 @@ from uad.models.self_attention import SelfAttention
 from uad.models.variational_autoencoder import Sampling
 
 
-def conv2d_block(input_tensor, n_filters, kernel_size=(3, 1), batchnorm=True,
+def conv2d_block(input_tensor, n_filters, kernel_size=(3, 3), batchnorm=True,
                  activation="relu"):
     """Function to add 2 convolutional layers with the parameters passed to it
     activation1: name of the activation function to apply. If none, pass "" (empty string)
@@ -39,9 +40,23 @@ def conv2d_block(input_tensor, n_filters, kernel_size=(3, 1), batchnorm=True,
     return x
 
 
+def get_k_size(n_filters, n_contractions, input_dims, contraction_idx, padding=None):
+    latent_depth = n_filters * int(2 ** n_contractions)
+
+    if padding is None:
+        current_dims = np.array(input_dims) // (2 ** contraction_idx)
+    else:
+        current_dims = (int((input_dims[0] + padding[1][0] + padding[1][1]) / (2 ** n_contractions)),
+                        int((input_dims[1] + padding[2][0] + padding[2][1]) / (2 ** n_contractions)),
+                        latent_depth)
+    x = np.min([3, current_dims[0]])
+    y = np.min([3, current_dims[1]])
+    return x, y
+
+
 def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=(3, 3), batchnorm=False, dropout=0,
                  spatial_dropout=0.2, padding=None, activation_function="relu", latent_depth=None, self_attention=False,
-                 final_activation=""):
+                 final_activation="", layer_norm=False):
     """
     U-Net architecture is composed of a contraction paths ((1 convolution layers, 1 activation layer)**2, 1 max pooling)**n
      and one expansive path: (1 convolution transpose, (1 convolution layers, 1 activation layer)**2)**n terminated by
@@ -79,10 +94,13 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
     # contracting path
     for i in range(n_contractions):
         if i == 0 and padding is None:
-            x = conv2d_block(encoder_inputs, n_filters * 2 ** i, kernel_size=k_size,
+            x = conv2d_block(encoder_inputs, n_filters * 2 ** i,
+                             kernel_size=get_k_size(n_filters, n_contractions, input_dims, i, padding=padding),
                              batchnorm=batchnorm, activation=activation_function)
         else:
-            x = conv2d_block(x, n_filters * 2 ** i, kernel_size=k_size, batchnorm=batchnorm,
+            x = conv2d_block(x, n_filters * 2 ** i,
+                             kernel_size=get_k_size(n_filters, n_contractions, input_dims, i, padding=padding),
+                             batchnorm=batchnorm,
                              activation=activation_function)
         x = layers.MaxPooling2D((2, 2))(x)
         if dropout != 0:
@@ -105,32 +123,46 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
 
     for i in range(n_contractions - 1, 0, -1):
         if i == n_contractions - 1:
-            x = layers.Conv2DTranspose(n_filters * 2 ** i, k_size, strides=(2, 2),
+            x = layers.Conv2DTranspose(n_filters * (2 ** i),
+                                       get_k_size(n_filters, n_contractions, input_dims, (i + 1), padding=padding),
+                                       strides=(2, 2),
                                        padding='same')(latent_inputs)
         else:
-            x = layers.Conv2DTranspose(n_filters * 2 ** i, k_size, strides=(2, 2),
+            x = layers.Conv2DTranspose(n_filters * (2 ** i),
+                                       get_k_size(n_filters, n_contractions, input_dims, (i + 1), padding=padding),
+                                       strides=(2, 2),
                                        padding='same')(x)
-        x = conv2d_block(x, n_filters * 2 ** i, kernel_size=k_size, batchnorm=batchnorm,
+        x = conv2d_block(x, n_filters * (2 ** i),
+                         kernel_size=get_k_size(n_filters, n_contractions, input_dims, i, padding=padding),
+                         batchnorm=batchnorm,
                          activation=activation_function)
         if dropout != 0:
             x = layers.Dropout(dropout)(x)
         if spatial_dropout != 0:
             x = layers.SpatialDropout2D(rate=dropout)(x)
 
-    x = layers.Conv2DTranspose(n_filters, kernel_size=k_size, strides=(2, 2),
+    x = layers.Conv2DTranspose(n_filters,
+                               kernel_size=get_k_size(n_filters, n_contractions, input_dims, 0, padding=padding),
+                               strides=(2, 2),
                                padding='same')(x)
     if dropout != 0:
         x = layers.Dropout(dropout)(x)
     if spatial_dropout != 0:
         x = layers.SpatialDropout2D(rate=dropout)(x)
 
-    x = conv2d_block(x, input_dims[-1], kernel_size=k_size, batchnorm=batchnorm, activation=activation_function)
+    x = conv2d_block(x, input_dims[-1],
+                     kernel_size=get_k_size(n_filters, n_contractions, input_dims, 0, padding=padding),
+                     batchnorm=batchnorm,
+                     activation=activation_function)
 
     if padding is not None:
         x = tf.image.resize_with_crop_or_pad(x, input_dims[0], input_dims[1])
 
     if final_activation != "":
         x = layers.Activation(final_activation)(x)
+
+    if layer_norm:
+        x = layers.LayerNormalization(axis=(1, 2, 3), epsilon=1e-5)(x)
 
     decoder = Model(inputs=latent_inputs, outputs=x, name="decoder")
 
