@@ -223,11 +223,12 @@ def get_unet_svdd(n_filters=64, n_contractions=3, dense_sizes=128, input_dims=(2
 
     # denses
     if type(dense_sizes) == int:
-        n_denses = 0
+        n_denses = 1
+        x = layers.Dense(dense_sizes, kernel_regularizer=l2(LAMBDA), use_bias=False)(x)
     else:
         n_denses = len(dense_sizes)
-    for i in range(n_denses):
-        x = layers.Dense(dense_sizes[i], kernel_regularizer=l2(LAMBDA), use_bias=False)(x)
+        for i in range(n_denses):
+            x = layers.Dense(dense_sizes[i], kernel_regularizer=l2(LAMBDA), use_bias=False)(x)
 
     return Model(encoder_inputs, x)
 
