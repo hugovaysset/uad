@@ -8,14 +8,19 @@ from uad.models.variational_autoencoder import Sampling
 
 
 def conv2d_block(input_tensor, n_filters, kernel_size=(3, 3), batchnorm=True,
-                 activation="relu"):
+                 activation="relu", kernel_regul=None):
     """Function to add 2 convolutional layers with the parameters passed to it
     activation1: name of the activation function to apply. If none, pass "" (empty string)
     activation2: name of the activation function to apply. If none, pass "" (empty string)
     """
     # first layer
-    x = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
-                      kernel_initializer='he_normal', padding='same')(input_tensor)
+    if kernel_regul is None:
+        x = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
+                          kernel_initializer='he_normal', padding='same')(input_tensor)
+    else:
+        x = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
+                          kernel_initializer='he_normal', padding='same', kernel_regularizer=kernel_regul,
+                          use_bias=False)(input_tensor)
     if batchnorm:
         x = layers.BatchNormalization()(x)
     if activation == "relu" or activation == "sigmoid" or activation == "linear":
@@ -26,8 +31,13 @@ def conv2d_block(input_tensor, n_filters, kernel_size=(3, 3), batchnorm=True,
         raise NotImplementedError("activation function should be given by a valid string of leaky_relu")
 
     # second layer
-    x = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
-                      kernel_initializer='he_normal', padding='same')(x)
+    if kernel_regul is None:
+        x = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
+                          kernel_initializer='he_normal', padding='same', kernel_regularizer=kernel_regul)(x)
+    else:
+        x = layers.Conv2D(filters=n_filters, kernel_size=kernel_size,
+                          kernel_initializer='he_normal', padding='same', kernel_regularizer=kernel_regul,
+                          use_bias=False)(x)
     if batchnorm:
         x = layers.BatchNormalization()(x)
     if activation == "relu" or activation == "sigmoid" or activation == "linear":
@@ -106,7 +116,7 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
         if dropout != 0:
             x = layers.Dropout(dropout)(x)
         if spatial_dropout != 0:
-            x = layers.SpatialDropout2D(rate=dropout)(x)
+            x = layers.SpatialDropout2D(rate=spatial_dropout)(x)
 
     if self_attention:
         s = SelfAttention(latent_depth // 2, (latent_dims[0], latent_dims[1]), positional_encoding=True)(x)[0]
@@ -139,7 +149,7 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
         if dropout != 0:
             x = layers.Dropout(dropout)(x)
         if spatial_dropout != 0:
-            x = layers.SpatialDropout2D(rate=dropout)(x)
+            x = layers.SpatialDropout2D(rate=spatial_dropout)(x)
 
     x = layers.Conv2DTranspose(n_filters,
                                kernel_size=get_k_size(n_filters, n_contractions, input_dims, 0, padding=padding),
@@ -148,7 +158,7 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
     if dropout != 0:
         x = layers.Dropout(dropout)(x)
     if spatial_dropout != 0:
-        x = layers.SpatialDropout2D(rate=dropout)(x)
+        x = layers.SpatialDropout2D(rate=spatial_dropout)(x)
 
     x = conv2d_block(x, input_dims[-1],
                      kernel_size=get_k_size(n_filters, n_contractions, input_dims, 0, padding=padding),
@@ -169,7 +179,57 @@ def get_unet_vae(n_filters=64, n_contractions=3, input_dims=(28, 28, 1), k_size=
     return encoder, decoder
 
 
-def get_ruff_svdd(input_dims=(32, 32, 3), n_filters=(32, 64, 128), dense_sizes=(64, 2), k_size=(5, 5), LAMBDA=1e-6,
+def get_unet_svdd(n_filters=64, n_contractions=3, dense_sizes=tuple(128), input_dims=(28, 28, 1), batchnorm=False,
+                  dropout=0, spatial_dropout=0.2, padding=None, activation_function="relu", latent_depth=None,
+                  self_attention=False, LAMBDA=1e-6):
+    if latent_depth is None:
+        latent_depth = n_filters * int(2 ** n_contractions)
+    if padding is None:
+        latent_dims = (int(input_dims[0] / (2 ** n_contractions)),
+                       int(input_dims[1] / (2 ** n_contractions)), latent_depth)
+    else:
+        latent_dims = (int((input_dims[0] + padding[1][0] + padding[1][1]) / (2 ** n_contractions)),
+                       int((input_dims[1] + padding[2][0] + padding[2][1]) / (2 ** n_contractions)), latent_depth)
+
+    encoder_inputs = layers.Input(shape=input_dims, name="encoder_inputs")
+
+    if padding is not None:
+        print(padding)
+        paddings = tf.constant(padding)  # shape d x 2 where d is the rank of the tensor and
+        # 2 represents "before" and "after"
+        x = tf.pad(encoder_inputs, paddings, name="pad")
+
+    # contracting path
+    for i in range(n_contractions):
+        if i == 0 and padding is None:
+            x = conv2d_block(encoder_inputs, n_filters * 2 ** i,
+                             kernel_size=get_k_size(n_filters, n_contractions, input_dims, i, padding=padding),
+                             batchnorm=batchnorm, activation=activation_function, kernel_regul=LAMBDA)
+        else:
+            x = conv2d_block(x, n_filters * 2 ** i,
+                             kernel_size=get_k_size(n_filters, n_contractions, input_dims, i, padding=padding),
+                             batchnorm=batchnorm, activation=activation_function, kernel_regul=LAMBDA)
+        x = layers.MaxPooling2D((2, 2))(x)
+        if dropout != 0:
+            x = layers.Dropout(dropout)(x)
+        if spatial_dropout != 0:
+            x = layers.SpatialDropout2D(rate=spatial_dropout)(x)
+
+    if self_attention:
+        s = SelfAttention(latent_depth // 2, (latent_dims[0], latent_dims[1]), positional_encoding=True)(x)[0]
+        x = layers.Concatenate(axis=-1)([s, x])
+
+    x = layers.Flatten()(x)
+
+    # denses
+    n_denses = len(dense_sizes)
+    for i in range(n_denses):
+        x = layers.Dense(dense_sizes[i], kernel_regularizer=l2(LAMBDA), use_bias=False)(x)
+
+    return Model(encoder_inputs, x)
+
+
+def get_ruff_svdd(input_dims=(32, 32, 3), n_filters=(32, 64, 128), dense_sizes=(128), k_size=(5, 5), LAMBDA=1e-6,
                   spatial_dropout=0.2, dropout=0, batchnorm=False):
     """
     LeNet-type architecture descirbed by Ruff et al. in their publication
@@ -206,6 +266,8 @@ def get_ruff_svdd(input_dims=(32, 32, 3), n_filters=(32, 64, 128), dense_sizes=(
     x = layers.Flatten()(x)
 
     # denses
+    if type(dense_sizes) == int:
+        dense_sizes = tuple(dense_sizes)
     n_denses = len(dense_sizes)
     for i in range(n_denses):
         x = layers.Dense(dense_sizes[i], kernel_regularizer=l2(LAMBDA), use_bias=False)(x)
