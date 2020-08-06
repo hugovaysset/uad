@@ -42,13 +42,11 @@ class DeepSVDD(Model):
         with tf.GradientTape() as tape:
             predictions = self(data)
             # distances_to_center = tf.norm(predictions - self.CENTER, axis=-1)
-            distances_to_center = tf.math.sqrt(tf.reduce_sum((predictions - self.CENTER) ** 2))
+            distances_to_center = tf.math.sqrt(tf.reduce_sum((predictions - self.CENTER) ** 2, axis=1))
             self.RADIUS = tf.reduce_max(distances_to_center)
-            centripetal_loss = tf.reduce_mean(distances_to_center)
-            self.RADIUS = tf.reduce_max(distances_to_center)
-            centripetal_loss = tf.reduce_mean(distances_to_center ** 2)
+            centripetal_loss = tf.reduce_mean(distances_to_center, axis=0)
             weight_decay = tf.math.reduce_sum(self.losses)
-            total_loss = centripetal_loss + self.LAMBDA * weight_decay
+            total_loss = centripetal_loss + weight_decay
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         return {
@@ -63,13 +61,11 @@ class DeepSVDD(Model):
         with tf.GradientTape() as tape:
             predictions = self(data)
             # distances_to_center = tf.norm(predictions - self.CENTER, axis=-1)
-            distances_to_center = tf.math.sqrt(tf.reduce_sum((predictions - self.CENTER) ** 2))
+            distances_to_center = tf.math.sqrt(tf.reduce_sum((predictions - self.CENTER) ** 2, axis=1))
             self.RADIUS = tf.reduce_max(distances_to_center)
-            centripetal_loss = tf.reduce_mean(distances_to_center)
-            self.RADIUS = tf.reduce_max(distances_to_center)
-            centripetal_loss = tf.reduce_mean(distances_to_center ** 2)
+            centripetal_loss = tf.reduce_mean(distances_to_center, axis=0)
             weight_decay = tf.math.reduce_sum(self.losses)
-            total_loss = centripetal_loss + self.LAMBDA * weight_decay
+            total_loss = centripetal_loss + weight_decay
         return {
             "total_loss": total_loss,
             "centripetal_loss": centripetal_loss,
