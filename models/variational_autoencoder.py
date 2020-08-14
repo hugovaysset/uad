@@ -358,7 +358,7 @@ class OC_VAE(Model):
         self.encoder = encoder
         self.decoder = decoder
         self.reconstruction_loss = reconstruction_loss
-        self.CENTER = tf.Variable(initial_value=np.ones(latent_dims),
+        self.CENTER = tf.Variable(initial_value=np.zeros(latent_dims),
                                   dtype=tf.float32)  # center of the same size as output
         self.LAMBDAS = LAMBDAS
 

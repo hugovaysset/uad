@@ -16,7 +16,7 @@ class DeepSVDD(Model):
     trained on the objective function.
     """
 
-    def __init__(self, model, final_dense_shape=32, LAMBDA=1e-6, **kwargs):
+    def __init__(self, model, final_dense_shape=32, **kwargs):
         """
         If inputs is None and outputs is None: builds a DeepSVDD network with a LeNet architecture as used in Ruff 2018
         Else give input and outputs to build a model via subclassing
@@ -29,7 +29,6 @@ class DeepSVDD(Model):
         self.CENTER = tf.Variable(initial_value=np.ones(final_dense_shape),
                                   dtype=tf.float32)  # center of the same size as output
         self.RADIUS = 0
-        self.LAMBDA = tf.constant(LAMBDA, dtype=tf.float32)
         self.model = model
 
     def set_center(self, new_center):
@@ -61,7 +60,7 @@ class DeepSVDD(Model):
         with tf.GradientTape() as tape:
             predictions = self(data)
             # distances_to_center = tf.norm(predictions - self.CENTER, axis=-1)
-            distances_to_center = tf.math.sqrt(tf.reduce_sum((predictions - self.CENTER) ** 2, axis=1))
+            distances_to_center = tf.reduce_sum((predictions - self.CENTER) ** 2, axis=1)
             self.RADIUS = tf.reduce_max(distances_to_center)
             centripetal_loss = tf.reduce_mean(distances_to_center, axis=0)
             weight_decay = tf.math.reduce_sum(self.losses)
